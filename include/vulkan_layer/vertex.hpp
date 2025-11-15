@@ -2,9 +2,9 @@
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>  
 struct Vertex {
-    const glm::vec3 pos; 
-    const glm::vec3 color; 
-    const glm::vec3 normal;   // <-- new
+    alignas(16) const glm::vec3 pos; 
+    alignas(16) const glm::vec3 color; 
+    alignas(16) const glm::vec3 normal;   // <-- new
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription binding{};

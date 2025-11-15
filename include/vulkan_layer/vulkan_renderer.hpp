@@ -14,14 +14,17 @@
 #define MAX_INDEX_NUMBER 100000
 #define MAX_OBJECTS_UB 100000
 #define MAX_SCENE_DATA 1
-class VulkanRenderer {
+#define SHADOW_DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
+#define SHADOW_RES 1024
+class VulkanRenderer
+{
 private:
     // Shader paths
     std::string vertShaderPath = "./shaders/test.vert.spv";
     std::string fragShaderPath = "./shaders/test.frag.spv";
-
+    std::string shadowShaderPath = "./shaders/testshadow.vert.spv";
     // Window info
-    GLFWwindow* window;
+    GLFWwindow *window;
     uint32_t width;
     uint32_t height;
 
@@ -29,7 +32,8 @@ private:
     VulkanInstance instance;
     VulkanDevice device;
     VulkanSwapchain swapchain;
-    VulkanRenderPass renderPass;
+    VulkanRenderPass mainRenderPass;
+    VulkanRenderPass shadowRenderPass;
 
     // Vertex/index buffers
     VkDeviceSize vertexSize = sizeof(Vertex);
@@ -46,18 +50,24 @@ private:
     VulkanBuffer objectsUB;
     VulkanBuffer sceneDataUB;
 
-    VulkanDescriptor objectsUBDescriptor;
-    VulkanDescriptor sceneDataUBDescriptor;
+    VulkanUBDescriptor objectsUBDescriptor;
+    VulkanUBDescriptor sceneDataUBDescriptor;
 
+    VulkanShadowView shadowView;
     // Pipeline and framebuffers
-    VulkanPipeline graphicsPipeline;
-    VulkanFramebuffers framebuffers;
+    VulkanPipeline mainPipeline;
+    VulkanPipeline shadowPipeline;
+
+    VulkanFramebuffers mainFramebuffers;
+    VulkanFramebuffers shadowFramebuffers;
 
     // Command buffers
     VulkanCommandBuffers commandBuffers;
-
+    VulkanCommandBuffers shadowCommandBuffers;
     // Synchronization
     VulkanSyncObjects syncObjects;
+    VulkanSyncObjects shadowSyncObjects;
+
     std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
     // Scene / draw data
@@ -71,21 +81,25 @@ private:
 
     int currentFrame = 0;
 
-    std::vector<uint8_t> padData(std::vector<UniformBufferObject> ubos, VkDeviceSize alignedSize){
+    std::vector<uint8_t> padData(std::vector<UniformBufferObject> ubos, VkDeviceSize alignedSize)
+    {
         std::vector<uint8_t> paddedData(alignedSize * ubos.size(), 0); // zero-initialized
 
-        for (size_t i = 0; i < ubos.size(); ++i) {
+        for (size_t i = 0; i < ubos.size(); ++i)
+        {
             std::memcpy(paddedData.data() + i * alignedSize, &ubos[i], sizeof(UniformBufferObject));
         }
         return paddedData;
     }
+
 public:
-    VulkanRenderer(GLFWwindow* _window, uint32_t _width, uint32_t _height)
+    VulkanRenderer(GLFWwindow *_window, uint32_t _width, uint32_t _height)
         : window(_window), width(_width), height(_height),
           instance(_window),
           device(instance),
           swapchain(device, instance, width, height),
-          renderPass(device, swapchain),
+          mainRenderPass(device, swapchain.getFormat(), swapchain.getDepthFormat(), true, true),
+          shadowRenderPass(device, SHADOW_DEPTH_FORMAT, SHADOW_DEPTH_FORMAT, false, true, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 
           // alignment must be initialized before using it
           alignment(device.getProperties().limits.minUniformBufferOffsetAlignment),
@@ -99,29 +113,29 @@ public:
 
           objectsUBDescriptor(device, objectsUB, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, uboSize),
           sceneDataUBDescriptor(device, sceneDataUB, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(SceneUBO)),
+          shadowView(device, (uint)SHADOW_RES, (uint)SHADOW_RES, SHADOW_DEPTH_FORMAT),
+          mainPipeline(device, mainRenderPass, swapchain.getExtent(), sceneDataUBDescriptor, objectsUBDescriptor, shadowView, true, vertShaderPath, fragShaderPath),
+          shadowPipeline(device, shadowRenderPass, shadowView.getExtent(), sceneDataUBDescriptor, objectsUBDescriptor, shadowView, false, shadowShaderPath, ""),
+          mainFramebuffers(device, mainRenderPass, 3, swapchain.getAttachmentPerSwapchainImage(), swapchain.getExtent()),
+          shadowFramebuffers(device, shadowRenderPass, 1, shadowView.getAttachmentsPerImage(), shadowView.getExtent()),
+          commandBuffers(device, mainFramebuffers),
+          shadowCommandBuffers(device, shadowFramebuffers),
+          syncObjects(device, 3), shadowSyncObjects(device, 1)
+    {}
 
-          graphicsPipeline(device, renderPass, swapchain, sceneDataUBDescriptor, objectsUBDescriptor, vertShaderPath, fragShaderPath),
-          framebuffers(device, swapchain, renderPass),
-          commandBuffers(device, framebuffers),
-          syncObjects(device, 3)
+
+    uint32_t loadMesh(const Mesh &mesh)
     {
-        std::cout << "Vertex buffer size: " << MAX_VERTEX_NUMBER * vertexSize << std::endl;
-        std::cout << "Index buffer size: " << MAX_INDEX_NUMBER * indexSize << std::endl;
-        std::cout << "Objects UB size: " << MAX_OBJECTS_UB * uboAlignedSize << std::endl;
-        std::cout << "Scene data UB size: " << MAX_SCENE_DATA * sizeof(SceneUBO) << std::endl;
-    }
-
-
-    uint32_t loadMesh(const Mesh& mesh){
         VkDeviceSize vertexOffset = vertices.size();
         VkDeviceSize indexOffset = indices.size();
 
-        const auto& meshVertices = mesh.getVertices();
-        const auto& meshNormals  = mesh.getNormals();
-        const auto& meshIndices  = mesh.getTriangles();
+        const auto &meshVertices = mesh.getVertices();
+        const auto &meshNormals = mesh.getNormals();
+        const auto &meshIndices = mesh.getTriangles();
 
-        for (size_t i = 0; i < meshVertices.size(); ++i){
-            vertices.push_back({meshVertices[i], {1.0f,1.0f,1.0f}, meshNormals[i]});
+        for (size_t i = 0; i < meshVertices.size(); ++i)
+        {
+            vertices.push_back({meshVertices[i], {1.0f, 1.0f, 1.0f}, meshNormals[i]});
         }
         indices.insert(indices.end(), meshIndices.begin(), meshIndices.end());
 
@@ -132,25 +146,50 @@ public:
         return meshPool.size() - 1;
     }
 
-    void addMeshDrawCall(uint32_t meshIndex, glm::mat4 transform){
+    void addMeshDrawCall(uint32_t meshIndex, glm::mat4 transform, glm::vec3 objectColor)
+    {
         drawCallMeshIndices.push_back(meshIndex);
-        ubos.push_back({transform});
+        ubos.push_back({transform, objectColor});
     }
 
-    void initSceneData(const glm::mat4 view, const glm::vec3 lightDir, const glm::vec3 lightColor){
-        glm::mat4 proj = glm::perspective(glm::radians(45.0f),
+    void initSceneData(const glm::mat4 view, const glm::vec3 lightDir, const glm::vec3 lightColor, const glm::vec3 ambientLight, const glm::vec3 groundColor)
+    {
+        glm::mat4 proj = glm::perspective(glm::radians(85.0f),
                                           swapchain.getExtent().width / (float)swapchain.getExtent().height,
                                           0.1f, 100.0f);
         proj[1][1] *= -1;
-        sceneData = {view, proj, lightDir, lightColor};
+        sceneData = {view, proj, lightDir, lightColor, ambientLight, groundColor};
         sceneDataUB.update(&sceneData, sizeof(SceneUBO), 0);
     }
 
-    void drawFrame(){
+    void drawShadows(){
+        vkWaitForFences(device.getDevice(), 1, &shadowSyncObjects.inFlightFence[0], VK_TRUE, UINT64_MAX);
+        vkResetFences(device.getDevice(), 1, &shadowSyncObjects.inFlightFence[0]);
+
+        shadowCommandBuffers.record(device, shadowView.getExtent(), shadowRenderPass, shadowFramebuffers, 
+                                    vertexBuffer, indexBuffer, sceneDataUBDescriptor, objectsUBDescriptor, 
+                                    shadowView, shadowPipeline, meshPool, drawCallMeshIndices, 0);
+        // Submit shadow pass
+        VkSubmitInfo shadowSubmit{};
+        shadowSubmit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        shadowSubmit.waitSemaphoreCount = 0;
+        shadowSubmit.commandBufferCount = 1;
+        shadowSubmit.pCommandBuffers = &shadowCommandBuffers.getCommandBuffers()[0];
+        shadowSubmit.signalSemaphoreCount = 1;
+        shadowSubmit.pSignalSemaphores = &shadowSyncObjects.renderFinishedSemaphore[0];
+
+
+        vkQueueSubmit(device.getGraphicsQueue(), 1, &shadowSubmit, shadowSyncObjects.inFlightFence[0]);
+
+    }
+    void drawFrame()
+    {
+        drawShadows();
         // pad and upload object UBOs
         std::vector<uint8_t> paddedUBOs = padData(ubos, uboAlignedSize);
         objectsUB.update(paddedUBOs.data(), paddedUBOs.size(), 0);
 
+        
         vkWaitForFences(device.getDevice(), 1, &syncObjects.inFlightFence[currentFrame], VK_TRUE, UINT64_MAX);
         vkResetFences(device.getDevice(), 1, &syncObjects.inFlightFence[currentFrame]);
 
@@ -159,16 +198,17 @@ public:
                               UINT64_MAX, syncObjects.imageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
         // record command buffer for this image
-        commandBuffers.record2(device, swapchain, renderPass, framebuffers,
+        commandBuffers.record(device, swapchain.getExtent(), mainRenderPass, mainFramebuffers,
                                vertexBuffer, indexBuffer, sceneDataUBDescriptor,
-                               objectsUBDescriptor, graphicsPipeline, meshPool,
+                               objectsUBDescriptor, shadowView, mainPipeline, meshPool,
                                drawCallMeshIndices, imageIndex);
-
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        
+        std::vector<VkSemaphore> waitSems = {shadowSyncObjects.renderFinishedSemaphore[0], syncObjects.imageAvailableSemaphore[currentFrame] };
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = &syncObjects.imageAvailableSemaphore[currentFrame];
+        submitInfo.waitSemaphoreCount = waitSems.size();
+        submitInfo.pWaitSemaphores = waitSems.data();
         submitInfo.pWaitDstStageMask = waitStages;
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &syncObjects.renderFinishedSemaphore[currentFrame];
@@ -189,31 +229,45 @@ public:
         currentFrame = (currentFrame + 1) % 3;
         ubos.clear();
         drawCallMeshIndices.clear();
+
+        
     }
 
-    ~VulkanRenderer(){
+    ~VulkanRenderer()
+    {
         destroy();
     }
 
-    void destroy(){
+    void destroy()
+    {
+        if(device.getDevice() == VK_NULL_HANDLE){
+            return;
+        }
 
-        if(instance.getInstance() == VK_NULL_HANDLE){
+        if (instance.getInstance() == VK_NULL_HANDLE)
+        {
             return;
         }
         vkDeviceWaitIdle(device.getDevice());
         syncObjects.destroy();
-        framebuffers.destroy();
+        shadowSyncObjects.destroy();
+        shadowFramebuffers.destroy();
+        mainFramebuffers.destroy();
         commandBuffers.destroy();
-        graphicsPipeline.destroy();
+        shadowCommandBuffers.destroy();
+        mainPipeline.destroy();
+        shadowPipeline.destroy();
+        shadowView.destroy();
         sceneDataUBDescriptor.destroy();
         sceneDataUB.destroy();
         objectsUBDescriptor.destroy();
         objectsUB.destroy();
         vertexBuffer.destroy();
         indexBuffer.destroy();
-        renderPass.destroy();
+        shadowRenderPass.destroy();
+        mainRenderPass.destroy();
         swapchain.destroy();
         device.destroy();
-        instance.destroy(); 
+        instance.destroy();
     }
 };

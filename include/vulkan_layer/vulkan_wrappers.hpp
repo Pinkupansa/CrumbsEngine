@@ -7,3 +7,4 @@
 #include "vulkan_render_pass.hpp"
 #include "vulkan_swapchain.hpp"
 #include "vulkan_sync_objects.hpp"
+#include "vulkan_shadow_view.hpp"
