@@ -3,13 +3,17 @@
 #include "vulkan_device.hpp"
 #include "vulkan_buffer.hpp"
 #include "ubo.hpp"
-class VulkanDescriptor {
+
+class VulkanUBDescriptor {
+
 private:
+
     VulkanDevice& device;
     VkDescriptorSetLayout layout{ VK_NULL_HANDLE };
     VkDescriptorPool pool{ VK_NULL_HANDLE };
     VkDescriptorSet descriptorSet{ VK_NULL_HANDLE };
     VkDeviceSize alignedObjectSize;
+
 public:
 
     const VkDescriptorSetLayout& getLayout() const{
@@ -19,7 +23,7 @@ public:
     const VkDeviceSize& getAlignedObjectSize() const{
         return alignedObjectSize;
     }
-    VulkanDescriptor(VulkanDevice& device, VulkanBuffer& uniformBuffer, VkShaderStageFlags stageFlags, VkDeviceSize unalignedObjectSize): device(device){
+    VulkanUBDescriptor(VulkanDevice& device, VulkanBuffer& uniformBuffer, VkShaderStageFlags stageFlags, VkDeviceSize unalignedObjectSize): device(device){
         VkDescriptorType descriptorType = uniformBuffer.isDynamic()? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         alignedObjectSize = uniformBuffer.getAlignedObjectSize();
         //binding for the ubo 
@@ -81,7 +85,7 @@ public:
         vkUpdateDescriptorSets(device.getDevice(), 1, &descriptorWrite, 0, nullptr);
         
     }
-    ~VulkanDescriptor() {
+    ~VulkanUBDescriptor() {
         destroy();
     }
 

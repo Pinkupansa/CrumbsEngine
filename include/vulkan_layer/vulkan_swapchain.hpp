@@ -41,6 +41,10 @@ public:
     const VkFormat& getDepthFormat() const{
         return depthFormat;
     }
+
+    std::vector<std::vector<VkImageView>> getAttachmentPerSwapchainImage(){
+        return {{swapchainImageViews[0], depthImageView}, {swapchainImageViews[1], depthImageView}, {swapchainImageViews[2], depthImageView}};
+    }
     VulkanSwapchain(VulkanDevice& device, VulkanInstance& instance, uint32_t width, uint32_t height): pDevice(device){
         
         VkSurfaceKHR surface = instance.getSurface();
@@ -121,7 +125,7 @@ public:
         }
         
         //Depth buffer
-        depthFormat = VK_FORMAT_D32_SFLOAT;
+        depthFormat = VK_FORMAT_D16_UNORM;
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.imageType = VK_IMAGE_TYPE_2D;

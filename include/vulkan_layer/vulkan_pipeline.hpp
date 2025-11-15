@@ -5,7 +5,7 @@
 #include "vertex.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_render_pass.hpp"
-
+#include "vulkan_shadow_view.hpp"
 VkShaderModule createShaderModule(std::vector<char> code, const VkDevice &device) {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -49,28 +49,36 @@ public:
     VkPipeline getPipeline(){return pipeline;}
     VkPipelineLayout getLayout(){return layout;}
 
-    VulkanPipeline(VulkanDevice& device, VulkanRenderPass& renderPass, VulkanSwapchain& swapchain, VulkanDescriptor& sceneDataUBDescriptor, VulkanDescriptor& objectsUBDescriptor,
-                   const std::string& vertPath, const std::string& fragPath): pDevice(device){
+    VulkanPipeline(VulkanDevice& device, VulkanRenderPass& renderPass, VkExtent2D extent, VulkanUBDescriptor& sceneDataUBDescriptor, VulkanUBDescriptor& objectsUBDescriptor,
+                   VulkanShadowView& shadowView, bool hasFrag, const std::string& vertPath, const std::string& fragPath): pDevice(device){
         
-        auto vertShaderCode = readFile("./shaders/test.vert.spv");
-        auto fragShaderCode = readFile("./shaders/test.frag.spv");
+        auto vertShaderCode = readFile(vertPath);
+        auto fragShaderCode = readFile(vertPath);
+        if(hasFrag)
+            fragShaderCode = readFile(fragPath);
 
         vertShaderModule = createShaderModule(vertShaderCode, device.getDevice());
-        fragShaderModule = createShaderModule(fragShaderCode, device.getDevice());
+        if(hasFrag)
+            fragShaderModule = createShaderModule(fragShaderCode, device.getDevice());
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         vertShaderStageInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;
         vertShaderStageInfo.module = vertShaderModule;
         vertShaderStageInfo.pName  = "main";
-
+                
         VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-        fragShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragShaderStageInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragShaderStageInfo.module = fragShaderModule;
-        fragShaderStageInfo.pName  = "main";
+        
+        if(hasFrag){
+            fragShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            fragShaderStageInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragShaderStageInfo.module = fragShaderModule;
+            fragShaderStageInfo.pName  = "main";
+        }
 
-        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {vertShaderStageInfo};
+        if(hasFrag)
+            shaderStages.push_back(fragShaderStageInfo);
 
         auto bindingDescription = Vertex::getBindingDescription();
         auto attributeDescriptions = Vertex::getAttributeDescriptions();
@@ -89,13 +97,13 @@ public:
 
         VkViewport viewport{};
         viewport.x = 0.0f; viewport.y = 0.0f;
-        viewport.width  = (float) swapchain.getExtent().width;
-        viewport.height = (float) swapchain.getExtent().height;
+        viewport.width  = (float) extent.width;
+        viewport.height = (float) extent.height;
         viewport.minDepth = 0.0f; viewport.maxDepth = 1.0f;
 
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = swapchain.getExtent();
+        scissor.extent = extent;
 
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -119,18 +127,20 @@ public:
         multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
         VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = VK_FALSE;
-
+        if(hasFrag){
+            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            colorBlendAttachment.blendEnable = VK_FALSE;
+        }
         VkPipelineColorBlendStateCreateInfo colorBlending{};
-        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.logicOpEnable = VK_FALSE;
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachment;
-                    
+        if(hasFrag){
+            colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            colorBlending.logicOpEnable = VK_FALSE;
+            colorBlending.attachmentCount = 1;
+            colorBlending.pAttachments = &colorBlendAttachment;
+        }
 
-        std::vector<VkDescriptorSetLayout> descLayouts{sceneDataUBDescriptor.getLayout(), objectsUBDescriptor.getLayout()};
+        std::vector<VkDescriptorSetLayout> descLayouts{sceneDataUBDescriptor.getLayout(), objectsUBDescriptor.getLayout(), shadowView.getLayout()};
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = descLayouts.size();                          // number of descriptor set layouts
@@ -151,14 +161,15 @@ public:
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.stageCount = shaderStages.size();
+        pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;
         pipelineInfo.pRasterizationState = &rasterizer;
         pipelineInfo.pMultisampleState = &multisampling;
-        pipelineInfo.pColorBlendState = &colorBlending;
+        if(hasFrag)
+            pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.layout = layout;
         pipelineInfo.renderPass = renderPass.getRenderPass(); // your render pass
         pipelineInfo.subpass = 0;

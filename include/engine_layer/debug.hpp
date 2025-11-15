@@ -27,5 +27,9 @@ public:
         std::cout << "\033[" << NORMAL_COLOR << ENGINE_DEBUG_FLAG << NORMAL_FLAG
                   << " " << msg << "\033[0m\n";
     }
+
+    static std::string vecToString(const glm::vec3& vector){
+        return "{" + std::to_string(vector.r) + ", " + std::to_string(vector.g) + ", " + std::to_string(vector.b) + "}";
+    }
 };
 

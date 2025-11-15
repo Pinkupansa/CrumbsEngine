@@ -149,45 +149,24 @@ Mesh importMesh(std::string meshPath){
     return Mesh(vertices, indices, normals);
 }
 
-Mesh loadOBJ(const std::string& path) {
-    std::vector<glm::vec3> vertices; 
-    std::vector<glm::vec3> normals;
-    std::vector<uint32_t> indices;
-    std::ifstream file(path);
-    if (!file.is_open()){
-        Debug::LogError("Can't load mesh " + path + " !");
-        throw std::runtime_error("Couldn't load mesh " + path);
-    }
+Mesh generateQuad(){
+   std::vector<glm::vec3> vertices = {
+        {1.0f, 0.0f, -1.0f},
+        {-1.0f, 0.0f, -1.0f},
+        {-1.0f, 0.0f, 1.0f},
+        {1.0f, 0.0f, 1.0f}
+    };
 
+    std::vector<uint32_t> triangles = {
+        0, 1, 3, 1, 2, 3
+    };
+    
+    std::vector<glm::vec3> normals = { 
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f}
+    };
 
-    std::string line;
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string prefix;
-        ss >> prefix;
-
-        if (prefix == "v") {
-            glm::vec3 v;
-            ss >> v.x >> v.y >> v.z;
-            vertices.push_back(v);
-        } 
-        else if (prefix == "vn") {
-            glm::vec3 n;
-            ss >> n.x >> n.y >> n.z;
-            normals.push_back(n);
-        } 
-        else if (prefix == "f") {
-            std::string vertStr;
-            for (int i = 0; i < 3; ++i) {
-                ss >> vertStr;
-                std::replace(vertStr.begin(), vertStr.end(), '/', ' ');
-                std::stringstream vss(vertStr);
-                int vi, ti, ni;
-                vss >> vi >> ti >> ni; // ignore texture index
-                indices.push_back(vi - 1); // store vertex index
-            }
-        }
-    }
-
-    return Mesh(vertices, indices, normals);
+    return Mesh(vertices, triangles, normals);
 }

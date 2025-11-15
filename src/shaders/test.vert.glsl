@@ -13,11 +13,14 @@ layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 proj;
     vec3 lightPos;
     vec3 lightColor;
+    vec3 ambientLight; 
+    vec3 groundLight;
 } scene;
 
 // Per-object UBO (set = 1, dynamic)
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
+    vec3 objectColor;
 } object;
 
 void main() {
