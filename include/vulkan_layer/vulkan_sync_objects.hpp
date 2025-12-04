@@ -1,18 +1,20 @@
 #pragma once
-#include <vulkan/vulkan.h>
-#include <stdexcept>
 #include "vulkan_device.hpp"
+#include <stdexcept>
 #include <vector>
+#include <vulkan/vulkan.h>
+
 class VulkanSyncObjects {
 
 private:
-    VulkanDevice& pDevice;
+    const VulkanDevice &pDevice;
+
 public:
     std::vector<VkSemaphore> imageAvailableSemaphore;
     std::vector<VkSemaphore> renderFinishedSemaphore;
     std::vector<VkFence> inFlightFence;
 
-    VulkanSyncObjects(VulkanDevice& device, int imageCount): pDevice(device){
+    VulkanSyncObjects(const VulkanDevice &device, int imageCount) : pDevice(device) {
         imageAvailableSemaphore.resize(imageCount);
         renderFinishedSemaphore.resize(imageCount);
         inFlightFence.resize(imageCount);
@@ -24,15 +26,15 @@ public:
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Start signaled so first frame runs immediately
 
-        for(int i = 0; i < imageCount; i++){
+        for (int i = 0; i < imageCount; i++) {
             if (vkCreateSemaphore(device.getDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphore[i]) != VK_SUCCESS ||
                 vkCreateSemaphore(device.getDevice(), &semaphoreInfo, nullptr, &renderFinishedSemaphore[i]) != VK_SUCCESS ||
-                vkCreateFence(device.getDevice(), &fenceInfo, nullptr, &inFlightFence[i]) != VK_SUCCESS)
-            {
+                vkCreateFence(device.getDevice(), &fenceInfo, nullptr, &inFlightFence[i]) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create synchronization objects!");
             }
         }
     }
+
     ~VulkanSyncObjects() {
         destroy();
     }
@@ -52,6 +54,5 @@ public:
                 imageAvailableSemaphore[i] = VK_NULL_HANDLE;
             }
         }
-
     }
 };

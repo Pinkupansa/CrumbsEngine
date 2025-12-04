@@ -1,60 +1,52 @@
 #pragma once
-#include <vulkan/vulkan.h>
-#include <vector>
 #include "vulkan_device.hpp"
-#include "vulkan_swapchain.hpp"
 #include "vulkan_render_pass.hpp"
 
+#include <vector>
+#include <vulkan/vulkan.h>
+
 class VulkanFramebuffers {
-private:
-    VulkanDevice& device;
-    VulkanSwapchain& swapchain;
-    VulkanRenderPass& renderPass;
-
+    private:
+    const VulkanDevice& device;
     std::vector<VkFramebuffer> framebuffers;
-public:
 
-    const std::vector<VkFramebuffer>& getFramebuffers() const{
+    public:
+    const std::vector<VkFramebuffer>& getFramebuffers () const {
         return framebuffers;
     }
 
-    VulkanFramebuffers(VulkanDevice& dev, VulkanSwapchain& sc, VulkanRenderPass& rp)
-        : device(dev), swapchain(sc), renderPass(rp) {
-        
-        framebuffers.resize(swapchain.getImageViews().size());
-        
-        for (size_t i = 0; i < swapchain.getImageViews().size(); ++i) {
-            std::array<VkImageView, 2> attachments= {swapchain.getImageViews()[i], swapchain.getDepthView()};
-            VkFramebufferCreateInfo fbInfo{};
-            fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            fbInfo.renderPass = renderPass.getRenderPass();
-            fbInfo.attachmentCount = attachments.size();
-            fbInfo.pAttachments = attachments.data();
-            fbInfo.width = swapchain.getExtent().width;
-            fbInfo.height = swapchain.getExtent().height;
-            fbInfo.layers = 1;
+    VulkanFramebuffers (const VulkanDevice& dev,
+                        const VulkanRenderPass& rp,
+                        const std::vector<std::vector<VkImageView>>& attachmentsPerFramebuffers,
+                        VkExtent2D extent,
+                        std::string name)
+    : device (dev) {
 
-            if (vkCreateFramebuffer(device.getDevice(), &fbInfo, nullptr, &framebuffers[i]) != VK_SUCCESS)
-                throw std::runtime_error("Failed to create framebuffer!");
+        framebuffers.resize (attachmentsPerFramebuffers.size ());
+
+        for (size_t i = 0; i < framebuffers.size (); ++i) {
+            std::vector<VkImageView> attachments = attachmentsPerFramebuffers[i];
             
-            device.nameObject((uint64_t) framebuffers[i], VK_OBJECT_TYPE_FRAMEBUFFER, "Framebuffer " + std::to_string(i));
+            framebuffers[i] =
+            createFramebuffer (device, rp.getRenderPass (), attachments, extent, name);
         }
-    
     }
 
-    ~VulkanFramebuffers() {
-        destroy();
+    ~VulkanFramebuffers () {
+        destroy ();
     }
 
-    void destroy(){
+    void destroy () {
         for (auto& fb : framebuffers) {
             if (fb != VK_NULL_HANDLE) {
-                vkDestroyFramebuffer(device.getDevice(), fb, nullptr);
+                vkDestroyFramebuffer (device.getDevice (), fb, nullptr);
                 fb = VK_NULL_HANDLE;
             }
         }
-        framebuffers.clear();
+        framebuffers.clear ();
     }
-    size_t size() const { return framebuffers.size(); }
- 
+
+    size_t size () const {
+        return framebuffers.size ();
+    }
 };

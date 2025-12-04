@@ -1,17 +1,18 @@
 #pragma once
-#include <vulkan/vulkan.h>
 #include "vulkan_instance.hpp"
 #include <iostream>
-#include "vulkan_instance.hpp"
+#include <vulkan/vulkan.h>
+
 class VulkanDevice {
 
-private: 
+private:
     VkPhysicalDevice physicalDevice;
-    VkPhysicalDeviceProperties properties; 
+    VkPhysicalDeviceProperties properties;
     VkDevice device;
     VkQueue graphicsQueue;
     uint32_t graphicsFamilyIndex;
-    
+    VkSurfaceCapabilitiesKHR surfaceCapabilities;
+
     VkCommandPool commandPool;
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = nullptr;
@@ -20,52 +21,50 @@ private:
     PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT = nullptr;
 
 public:
-    
-    const VkDevice& getDevice() const{
+    const VkDevice &getDevice() const {
         return device;
     }
 
-    const VkPhysicalDevice& getPhysicalDevice() const{
+    const VkPhysicalDevice &getPhysicalDevice() const {
         return physicalDevice;
     }
 
-    const VkPhysicalDeviceProperties& getProperties() const{ 
+    const VkPhysicalDeviceProperties &getProperties() const {
         return properties;
     }
-    const VkCommandPool& getCommandPool() const{
+
+    const VkCommandPool &getCommandPool() const {
         return commandPool;
     }
 
-    const VkQueue& getGraphicsQueue() const{
+    const VkQueue &getGraphicsQueue() const {
         return graphicsQueue;
     }
-    
-    VulkanDevice(VulkanInstance& instance){
-        VkSurfaceKHR surface = instance.getSurface();
-        //First call to get the device Count
-        uint32_t deviceCount = 0; 
+
+    VulkanDevice(VulkanInstance &instance) {
+        // First call to get the device Count
+        uint32_t deviceCount = 0;
         vkEnumeratePhysicalDevices(instance.getInstance(), &deviceCount, nullptr);
-        if(deviceCount == 0){
+        if (deviceCount == 0) {
             throw std::runtime_error("No GPUs with Vulkan support found!");
         }
-        //Second call after creating a device array of the correct size
+        // Second call after creating a device array of the correct size
         std::vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(instance.getInstance(), &deviceCount, devices.data());
 
-
-        //Print available devices 
+        // Print available devices
         std::cout << "Available Vulkan devices:\n";
-        for (const auto& device : devices) {
+        for (const auto &device : devices) {
             VkPhysicalDeviceProperties props;
             vkGetPhysicalDeviceProperties(device, &props);
             std::cout << " - " << props.deviceName << "\n";
         }
 
-        for(const auto& pdevice: devices){ 
+        for (const auto &pdevice : devices) {
             VkPhysicalDeviceProperties props;
             vkGetPhysicalDeviceProperties(pdevice, &props);
-            //Pick the first discrete GPU
-            if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
+            // Pick the first discrete GPU
+            if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
                 std::cout << "-> Selected discrete GPU: " << props.deviceName << "\n";
                 physicalDevice = pdevice;
             }
@@ -73,26 +72,27 @@ public:
 
         physicalDevice = devices[0];
         vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-        //find a queueIndex
+
+        // find a queueIndex
         graphicsFamilyIndex = -1;
-        uint32_t queueFamilyCount = 0; 
+        uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
         std::vector<VkQueueFamilyProperties> families(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, families.data());
 
-        for(uint32_t i = 0; i < queueFamilyCount; ++i){
-            if(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT){
+        for (uint32_t i = 0; i < queueFamilyCount; ++i) {
+            if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 std::cout << "Found graphics queue family: " << i << "\n";
                 graphicsFamilyIndex = i;
                 break;
             }
         }
-        if (graphicsFamilyIndex == -1){
+        if (graphicsFamilyIndex == -1) {
             throw std::runtime_error("Couldn't find graphics queue family !");
         }
 
-        float queuePriority = 1.0f; 
+        float queuePriority = 1.0f;
 
         VkDeviceQueueCreateInfo queueCreateInfo{};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -100,9 +100,9 @@ public:
         queueCreateInfo.queueCount = 1;
         queueCreateInfo.pQueuePriorities = &queuePriority;
 
-        std::vector<const char*> deviceExtensions = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME,   
-            "VK_KHR_portability_subset"        // required on macOS
+        std::vector<const char *> deviceExtensions = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            "VK_KHR_portability_subset" // required on macOS
         };
 
         VkDeviceCreateInfo deviceCreateInfo{};
@@ -115,29 +115,28 @@ public:
         if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create logical device!");
         }
-        
-        vkSetDebugUtilsObjectNameEXT =(PFN_vkSetDebugUtilsObjectNameEXT)(vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT"));
+
+        vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)(vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT"));
 
         vkCmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)(vkGetDeviceProcAddr(device, "vkCmdBeginDebugUtilsLabelEXT"));
 
         vkCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)(vkGetDeviceProcAddr(device, "vkCmdEndDebugUtilsLabelEXT"));
 
-        vkCmdInsertDebugUtilsLabelEXT =(PFN_vkCmdInsertDebugUtilsLabelEXT)(vkGetDeviceProcAddr(device, "vkCmdInsertDebugUtilsLabelEXT"));
+        vkCmdInsertDebugUtilsLabelEXT = (PFN_vkCmdInsertDebugUtilsLabelEXT)(vkGetDeviceProcAddr(device, "vkCmdInsertDebugUtilsLabelEXT"));
 
         vkGetDeviceQueue(device, graphicsFamilyIndex, 0, &graphicsQueue);
 
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.queueFamilyIndex = graphicsFamilyIndex; // your graphics queue
+        poolInfo.queueFamilyIndex = graphicsFamilyIndex;                  // your graphics queue
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // optional, could use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
 
         if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create command pool!");
-        }   
-        
+        }
     }
 
-    ~VulkanDevice(){
+    ~VulkanDevice() {
         destroy();
     }
 
@@ -152,7 +151,7 @@ public:
         }
     }
 
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties){
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const {
         VkPhysicalDeviceMemoryProperties memProperties;
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 
@@ -166,7 +165,7 @@ public:
         throw std::runtime_error("failed to find suitable memory type!");
     }
 
-    void nameObject(uint64_t vulkanObject, VkObjectType type, std::string name){
+    void nameObject(uint64_t vulkanObject, VkObjectType type, std::string name) const {
         VkDebugUtilsObjectNameInfoEXT nameInfo{};
         nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
         nameInfo.objectType = type; // example

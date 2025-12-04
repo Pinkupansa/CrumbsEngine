@@ -13,19 +13,18 @@
 
 class Debug {
 public:
-    static void LogWarning(const std::string& msg) {
+    static void LogWarning(const std::string &msg) {
         std::cout << "\033[" << WARNING_COLOR << ENGINE_DEBUG_FLAG << WARNING_FLAG
                   << "\033[0m " << msg << "\033[0m\n";
     }
 
-    static void LogError(const std::string& msg) {
+    static void LogError(const std::string &msg) {
         std::cout << "\033[" << ERROR_COLOR << ENGINE_DEBUG_FLAG << ERROR_FLAG
                   << "\033[0m " << msg << "\033[0m\n";
     }
 
-    static void Log(const std::string& msg) { 
+    static void Log(const std::string &msg) {
         std::cout << "\033[" << NORMAL_COLOR << ENGINE_DEBUG_FLAG << NORMAL_FLAG
                   << " " << msg << "\033[0m\n";
     }
 };
-

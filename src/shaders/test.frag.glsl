@@ -9,42 +9,124 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 view;
     mat4 proj;
-    vec3 lightDir;
+    mat4 lightView;
+    mat4 lightProj;
     vec3 lightColor;
+    vec3 lightDir;
 } scene;
 
-// Per-object UBO (if you want to use normals, not mandatory yet)
+// Object UBO
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
 } object;
-float saturate(float x){
-    if(x < 0){
-        return 0;
-    }
-    if(x > 1){
-        return 1;
-    }
-    return x;
-}
+
+layout(set = 2, binding = 0) uniform sampler2D shadowSampler;
+
+float saturate(float x) { return clamp(x, 0.0, 1.0); }
+
 vec3 getCameraPos() {
-    // Extract rotation (upper-left 3x3)
     mat3 rot = mat3(scene.view);
-
-    // Extract translation (column 3)
-    vec3 t = vec3(scene.view[3]); // column 3 = translation
-
-    // Compute world-space camera position
-    vec3 camPos = -transpose(rot) * t;
-    return camPos;
+    vec3 t = vec3(scene.view[3]);
+    return -transpose(rot) * t;
 }
-float computeSpecularLight(){
-    vec3 reflection = normalize(scene.lightDir - 2*dot(scene.lightDir, vertNormal))*vertNormal;
+
+vec3 getLightDir()
+{
+    // Use the precomputed light direction from the Scene UBO (world space)
+    return normalize(scene.lightDir);
+}
+
+float computeSpecularLight(vec3 N, vec3 L) {
     vec3 camDir = normalize(getCameraPos() - fragWorldPos);
-    return pow(saturate(dot(-camDir, reflection)), 8.0) * 500.0 ;
+    vec3 R = reflect(-L, N);
+    return pow(max(dot(R, camDir), 0.0), 8.0) * 2.0;
 }
-void main() {
-    float diff = max(dot(vertNormal, scene.lightDir), 0.0);
+float computeDepth(vec4 lightSpacePos)
+{   
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    float currentDepth = projCoords.z;
 
-    vec3 color = scene.lightColor * (computeSpecularLight() + diff);
-    outColor = vec4(color, 1.0);
+    //currentDepth = 2.0 * currentDepth - 1.0; // Remap to GL NDC for comparison
+    //currentDepth = (2 * 30.0f*0.1f)/(30.0f + 0.1f - currentDepth * (30.0f - 0.1f));
+    return currentDepth;
+}
+float computeShadow(vec4 lightSpacePos, vec3 N, vec3 L)
+{
+    // Perspective divide -> NDC
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+
+    // Convert NDC XY [-1,1] to UV [0,1]
+    vec2 uv = projCoords.xy * 0.5 + 0.5;
+
+    // If outside the light frustum, consider lit
+    if (uv.x < 0.0 || uv.x > 1.0 ||
+        uv.y < 0.0 || uv.y > 1.0)
+        return 1.0;
+
+    // Sample depth from shadow map (stored in [0,1] for Vulkan)
+    float closestDepth = texture(shadowSampler, uv).r;
+
+    // --- CRITICAL: If lightProj was built with GL conventions (NDC z in [-1,1]),
+    // remap to Vulkan [0,1]. If already Vulkan (orthoRH_ZO), use projCoords.z directly.
+    // Since mode 0 shows correct shadow map but mode 1 inverted, the projection is GL-style.
+    float currentDepth = computeDepth(lightSpacePos);
+
+    // Slope-scaled bias to reduce acne
+    float nDotL = dot(N, L);
+    float bias = max(0.01, 0.02 * (1.0 - nDotL));
+
+    // In Vulkan: smaller depth = closer to light
+    // If currentDepth > closestDepth (with bias) -> fragment is farther -> in shadow
+    if (currentDepth - bias > closestDepth)
+        return 0.0;  // Shadow
+    else
+        return 1.0;  // Lit
+    
+    
+}
+
+void main() {
+    vec3 N = normalize(vertNormal);
+    vec3 L = getLightDir();
+
+    vec4 lightSpacePos = scene.lightProj * scene.lightView * vec4(fragWorldPos, 1.0);
+    
+    // DEBUG diagnostics
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    vec2 uv = projCoords.xy * 0.5 + 0.5;
+    float shadowMapDepth = texture(shadowSampler, uv).r;
+    //float shadowMapDepth = 0;
+
+    float currentDepth = computeDepth(lightSpacePos);
+    const int debugMode = 3;
+    
+   if (debugMode == 0) {
+        // Show stored depth in shadow map
+        outColor = vec4(vec3(shadowMapDepth), 1.0);
+        return;
+    }
+    if (debugMode == 1) {
+        // Show current fragment depth
+        outColor = vec4(vec3(currentDepth), 1.0);
+        return;
+    }
+    if (debugMode == 2) {
+        // Show difference (positive = in shadow, negative = lit)
+        float diff = currentDepth - shadowMapDepth;
+        outColor = vec4(vec3(diff * 0.5 + 0.5), 1.0);
+        return;
+    }
+    
+    // Mode 3: Actual lighting
+    // Calculate shadow factor using stored light direction
+    float shadow = computeShadow(lightSpacePos, N, L);
+
+    // Basic lighting calculation
+    float diffuse = max(dot(N, L), 0.0);
+    float specular = computeSpecularLight(N, L);
+
+    // Combine lighting with shadow (add small ambient)
+    vec3 lighting = (diffuse + specular) * shadow * scene.lightColor + vec3(0.08);
+    //vec3 lighting = vec3(shadow, shadow, shadow);
+    outColor = vec4(lighting, 1.0);
 }

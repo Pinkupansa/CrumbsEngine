@@ -1,80 +1,78 @@
 #pragma once
-#include <vulkan/vulkan.h>
+#include "vulkan_constants.hpp"
 #include "vulkan_device.hpp"
-#include "vulkan_swapchain.hpp"
-
+#include "vulkan_object_creation_utils.hpp"
+#include <vulkan/vulkan.h>
 class VulkanRenderPass {
-private: 
-    VulkanDevice* pDevice;
+    private:
+    const VulkanDevice& pDevice;
     VkRenderPass renderPass;
-public:
-    
-    VkRenderPass getRenderPass(){
+
+    std::vector<VkClearValue> clearValues;
+
+    public:
+    std::vector<VkClearValue> getClearValues() const {
+        return clearValues;
+    }
+    const VkRenderPass& getRenderPass () const {
         return renderPass;
     }
 
-    VulkanRenderPass(VulkanDevice& device, VulkanSwapchain& swapchain){
-        pDevice = &device;
-        VkAttachmentDescription colorAttachment;
-        colorAttachment.format = swapchain.getFormat();       // same as swapchain
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;         // no MSAA for now
-        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;    // clear at start
-        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;  // store result for presentation
-        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // ready for presentation
-        colorAttachment.flags = 0;
-        
-        VkAttachmentReference colorAttachmentRef{};
-        colorAttachmentRef.attachment = 0;                        // index in the attachment array
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        
-        VkAttachmentDescription depthAttachment{};
-        depthAttachment.format = swapchain.getDepthFormat(); // the same format as your depth image
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // depth not presented
-        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        
+    VulkanRenderPass (const VulkanDevice& device,
+                      std::vector<VkAttachmentDescription> colorAttachments,
+                      std::vector<VkClearValue> colorClearValues,
+                      std::vector<VkAttachmentDescription> depthAttachments,
+                      std::vector<VkClearValue> depthClearValues)
+    : pDevice (device) {
+        int attachmentCount = 0;
+        clearValues = colorClearValues; 
+        clearValues.insert(clearValues.end(), depthClearValues.begin(), depthClearValues.end());
+        std::vector<VkAttachmentReference> colorAttachmentsRefs;
+        for (VkAttachmentDescription cAtt : colorAttachments) {
+            colorAttachmentsRefs.push_back (createColorAttachmentRef (attachmentCount));
+            attachmentCount++;
+        }
 
-        VkAttachmentReference depthAttachmentRef{};
-        depthAttachmentRef.attachment = 1; // index of the depth attachment
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        std::vector<VkAttachmentReference> depthAttachmentsRefs;
+        for (VkAttachmentDescription dAtt : depthAttachments) {
+            depthAttachmentsRefs.push_back (createDepthAttachmentRef (attachmentCount));
+            attachmentCount++;
+        }
+
 
         VkSubpassDescription subpass{};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorAttachmentRef;
-        subpass.pDepthStencilAttachment = &depthAttachmentRef;
+        subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount    = colorAttachmentsRefs.size ();
+        subpass.pColorAttachments       = colorAttachmentsRefs.data ();
+        subpass.pDepthStencilAttachment = depthAttachmentsRefs.data ();
 
-        std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+        std::vector<VkAttachmentDescription> attachments = colorAttachments;
+        attachments.insert (attachments.end (), depthAttachments.begin (),
+                            depthAttachments.end ());
 
         VkRenderPassCreateInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = attachments.size();
-        renderPassInfo.pAttachments = attachments.data();
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
+        renderPassInfo.attachmentCount = attachments.size ();
+        renderPassInfo.pAttachments    = attachments.data ();
+        renderPassInfo.subpassCount    = 1;
+        renderPassInfo.pSubpasses      = &subpass;
 
-        if (vkCreateRenderPass(device.getDevice(), &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create render pass!");
+        if (vkCreateRenderPass (device.getDevice (), &renderPassInfo, nullptr,
+                                &renderPass) != VK_SUCCESS) {
+            throw std::runtime_error ("Failed to create render pass!");
         }
 
-        device.nameObject((uint64_t)renderPass, VK_OBJECT_TYPE_RENDER_PASS, "RenderPass");
-    }
-    ~VulkanRenderPass(){
-        destroy();
+        device.nameObject ((uint64_t)renderPass, VK_OBJECT_TYPE_RENDER_PASS, "RenderPass");
     }
 
-    void destroy(){
-        if(renderPass != VK_NULL_HANDLE){
-            vkDestroyRenderPass(pDevice->getDevice(), renderPass, nullptr);
+    ~VulkanRenderPass () {
+        destroy ();
+    }
+
+    void destroy () {
+        if (renderPass != VK_NULL_HANDLE) {
+            vkDestroyRenderPass (pDevice.getDevice (), renderPass, nullptr);
             renderPass = VK_NULL_HANDLE;
         }
     }
-
 };

@@ -1,24 +1,25 @@
 #pragma once
 
-#include <glm/glm.hpp>
 #include "debug.hpp"
 #include "mesh.hpp"
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <string>
 #include <algorithm>
-Mesh generateTetrahedron(){
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <fstream>
+#include <glm/glm.hpp>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+Mesh generateTetrahedron() {
     // Vertices of a regular tetrahedron centered at the origin
     std::vector<glm::vec3> vertices = {
-        { 1.0f,  1.0f,  1.0f},   // 0
-        {-1.0f, -1.0f,  1.0f},   // 1
-        {-1.0f,  1.0f, -1.0f},   // 2
-        { 1.0f, -1.0f, -1.0f}    // 3
+        {1.0f, 1.0f, 1.0f},   // 0
+        {-1.0f, -1.0f, 1.0f}, // 1
+        {-1.0f, 1.0f, -1.0f}, // 2
+        {1.0f, -1.0f, -1.0f}  // 3
     };
 
     // Indices for tetrahedron faces
@@ -26,8 +27,7 @@ Mesh generateTetrahedron(){
         2, 1, 0,
         1, 3, 0,
         3, 2, 0,
-        2, 3, 1
-    };
+        2, 3, 1};
 
     // Compute face normals
     std::vector<glm::vec3> faceNormals;
@@ -58,7 +58,6 @@ Mesh generateTetrahedron(){
         n = glm::normalize(n);
     return Mesh(vertices, indices, vertexNormals);
 }
-
 
 Mesh generateSphere() {
     const uint32_t X_SEGMENTS = 32; // longitude resolution
@@ -108,14 +107,12 @@ Mesh generateSphere() {
     return Mesh(vertices, indices, normals);
 }
 
-
-Mesh importMesh(std::string meshPath){
+Mesh importMesh(std::string meshPath) {
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(meshPath,
-        aiProcess_Triangulate |
-        aiProcess_GenSmoothNormals |
-        aiProcess_JoinIdenticalVertices
-    );
+    const aiScene *scene = importer.ReadFile(meshPath,
+                                             aiProcess_Triangulate |
+                                                 aiProcess_GenSmoothNormals |
+                                                 aiProcess_JoinIdenticalVertices);
 
     if (!scene || !scene->HasMeshes()) {
         Debug::LogError("Can't load mesh " + meshPath + " !");
@@ -127,12 +124,12 @@ Mesh importMesh(std::string meshPath){
     std::vector<uint32_t> indices;
 
     for (unsigned int m = 0; m < scene->mNumMeshes; ++m) {
-        aiMesh* mesh = scene->mMeshes[m];
+        aiMesh *mesh = scene->mMeshes[m];
 
         // Vertices & normals
         for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
             aiVector3D pos = mesh->mVertices[v];
-            aiVector3D norm = mesh->HasNormals() ? mesh->mNormals[v] : aiVector3D(0,1,0);
+            aiVector3D norm = mesh->HasNormals() ? mesh->mNormals[v] : aiVector3D(0, 1, 0);
 
             vertices.push_back(glm::vec3(pos.x, pos.y, pos.z));
             normals.push_back(glm::vec3(norm.x, norm.y, norm.z));
@@ -149,16 +146,15 @@ Mesh importMesh(std::string meshPath){
     return Mesh(vertices, indices, normals);
 }
 
-Mesh loadOBJ(const std::string& path) {
-    std::vector<glm::vec3> vertices; 
+Mesh loadOBJ(const std::string &path) {
+    std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> normals;
     std::vector<uint32_t> indices;
     std::ifstream file(path);
-    if (!file.is_open()){
+    if (!file.is_open()) {
         Debug::LogError("Can't load mesh " + path + " !");
         throw std::runtime_error("Couldn't load mesh " + path);
     }
-
 
     std::string line;
     while (std::getline(file, line)) {
@@ -170,24 +166,44 @@ Mesh loadOBJ(const std::string& path) {
             glm::vec3 v;
             ss >> v.x >> v.y >> v.z;
             vertices.push_back(v);
-        } 
-        else if (prefix == "vn") {
+        } else if (prefix == "vn") {
             glm::vec3 n;
             ss >> n.x >> n.y >> n.z;
             normals.push_back(n);
-        } 
-        else if (prefix == "f") {
+        } else if (prefix == "f") {
             std::string vertStr;
             for (int i = 0; i < 3; ++i) {
                 ss >> vertStr;
                 std::replace(vertStr.begin(), vertStr.end(), '/', ' ');
                 std::stringstream vss(vertStr);
                 int vi, ti, ni;
-                vss >> vi >> ti >> ni; // ignore texture index
+                vss >> vi >> ti >> ni;     // ignore texture index
                 indices.push_back(vi - 1); // store vertex index
             }
         }
     }
 
     return Mesh(vertices, indices, normals);
+}
+
+Mesh generateQuad(){
+   std::vector<glm::vec3> vertices = {
+        {1.0f, 0.0f, -1.0f},
+        {-1.0f, 0.0f, -1.0f},
+        {-1.0f, 0.0f, 1.0f},
+        {1.0f, 0.0f, 1.0f}
+    };
+
+    std::vector<uint32_t> triangles = {
+        0, 1, 3, 1, 2, 3
+    };
+    
+    std::vector<glm::vec3> normals = { 
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f}
+    };
+
+    return Mesh(vertices, triangles, normals);
 }

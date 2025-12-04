@@ -11,8 +11,10 @@ layout(location = 1) out vec3 fragWorldPos;
 layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 view;
     mat4 proj;
-    vec3 lightPos;
+    mat4 lightView;
+    mat4 lightProj;
     vec3 lightColor;
+    vec3 lightDir;
 } scene;
 
 // Per-object UBO (set = 1, dynamic)
@@ -20,11 +22,14 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
 } object;
 
+
 void main() {
     vec4 worldPos = object.model * vec4(inPos, 1.0);
-    gl_Position = scene.proj * scene.view * worldPos;
+    
+   
     mat3 normalMatrix = transpose(inverse(mat3(object.model)));
     outNormal = normalize(normalMatrix * inNormal);
     fragWorldPos = worldPos.xyz;
-    
+    gl_Position = scene.proj * scene.view * worldPos;
+    //gl_Position = scene.lightProj * scene.lightView * worldPos;
 }
