@@ -2,10 +2,8 @@
 
 ## Vulkan Layer
 - Comments
-- Shadows support
 - Shader change support
 - Raytracing ? 
-- Factorizing Vulkan objects creation
 - OS Support
 
 ## Engine Layer

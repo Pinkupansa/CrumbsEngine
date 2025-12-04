@@ -131,7 +131,7 @@ class VulkanRenderer {
                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                              sizeof (SceneUBO),
                              "Scene UB Descriptor Set"),
-      shadowView (device, 1600, 1200, DEFAULT_SHADOW_FORMAT),
+      shadowView (device, 1600, 1600, DEFAULT_SHADOW_FORMAT),
       shadowImageDrawer (device,
                          shadowView.getExtent (),
                          shadowView.getAttachmentsPerImage (),
@@ -230,6 +230,7 @@ class VulkanRenderer {
             return;
         }
         vkDeviceWaitIdle (device.getDevice ());
+        shadowImageDrawer.destroy();
         mainImageDrawer.destroy ();
         sceneDataUBDescriptor.destroy ();
         sceneDataUB.destroy ();
@@ -239,6 +240,7 @@ class VulkanRenderer {
         indexBuffer.destroy ();
         swapchain.destroy ();
         mainSurface.destroy ();
+        shadowView.destroy ();
         device.destroy ();
         instance.destroy ();
     }
