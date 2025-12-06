@@ -1,16 +1,18 @@
 #pragma once
 #define GLFW_INCLUDE_VULKAN
 #include "mesh.hpp"
-#include "mesh_draw_info.hpp"
-#include "scene_ubo.hpp"
-#include "ubo.hpp"
-#include "vertex.hpp"
+#include "vulkan_mesh_draw_info.hpp"
+#include "vulkan_scene_ubo.hpp"
+#include "vulkan_ubo.hpp"
+#include "vulkan_vertex.hpp"
 #include "vulkan_buffer.hpp"
 #include "vulkan_descriptor.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_image_drawer.hpp"
 #include "vulkan_shadow_view.hpp"
 #include "vulkan_swapchain.hpp"
+#include "vulkan_texture_bundle.hpp"
+
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
@@ -38,6 +40,8 @@ class VulkanRenderer {
 
     VulkanSwapchain swapchain;
 
+    VulkanTextureBundle textureBundle;
+
     // Vertex/index buffers
     VkDeviceSize vertexSize = sizeof (Vertex);
     VkDeviceSize indexSize  = sizeof (uint32_t);
@@ -46,7 +50,7 @@ class VulkanRenderer {
     VulkanBuffer indexBuffer;
 
     // Uniform buffers
-    VkDeviceSize uboSize = sizeof (UniformBufferObject);
+    VkDeviceSize uboSize = sizeof (VulkanUniformBufferObject);
     VkDeviceSize alignment;
     VkDeviceSize uboAlignedSize;
 
@@ -66,19 +70,19 @@ class VulkanRenderer {
     std::vector<MeshDrawInfo> meshPool;
     std::vector<uint32_t> drawCallMeshIndices;
 
-    SceneUBO sceneData;
-    std::vector<UniformBufferObject> ubos;
+    VulkanSceneUBO sceneData;
+    std::vector<VulkanUniformBufferObject> ubos;
 
     // todo : Create shadow render pass, shadow pipeline, shadowframebuffers and shadow syncobjects
     int currentFrame = 0;
 
     std::vector<uint8_t>
-    padData (std::vector<UniformBufferObject> ubos, VkDeviceSize alignedSize) {
+    padData (std::vector<VulkanUniformBufferObject> ubos, VkDeviceSize alignedSize) {
         std::vector<uint8_t> paddedData (alignedSize * ubos.size (), 0); // zero-initialized
 
         for (size_t i = 0; i < ubos.size (); ++i) {
             std::memcpy (paddedData.data () + i * alignedSize, &ubos[i],
-                         sizeof (UniformBufferObject));
+                         sizeof (VulkanUniformBufferObject));
         }
         return paddedData;
     }
@@ -87,7 +91,7 @@ class VulkanRenderer {
     VulkanRenderer (GLFWwindow* _window, uint32_t _width, uint32_t _height)
     : window (_window), width (_width), height (_height), instance (window),
       device (instance), mainSurface (instance, device, window),
-      swapchain (device, mainSurface),
+      swapchain (device, mainSurface), textureBundle (device, {}),
       alignment (device.getProperties ().limits.minUniformBufferOffsetAlignment),
       uboAlignedSize ((uboSize + alignment - 1) & ~(alignment - 1)),
 
@@ -115,7 +119,7 @@ class VulkanRenderer {
                  "Objects UB"),
       sceneDataUB (device,
                    VulkanBufferType::Uniform,
-                   MAX_SCENE_DATA * sizeof (SceneUBO),
+                   MAX_SCENE_DATA * sizeof (VulkanSceneUBO),
                    nullptr,
                    false,
                    0,
@@ -129,7 +133,7 @@ class VulkanRenderer {
       sceneDataUBDescriptor (device,
                              sceneDataUB,
                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                             sizeof (SceneUBO),
+                             sizeof (VulkanSceneUBO),
                              "Scene UB Descriptor Set"),
       shadowView (device, 1600, 1600, DEFAULT_SHADOW_FORMAT),
       shadowImageDrawer (device,
@@ -148,7 +152,7 @@ class VulkanRenderer {
       mainImageDrawer (device,
                        mainSurface.getCapabilities ().currentExtent,
                        swapchain.getAttachmentsPerFramebuffer (),
-                       { sceneDataUBDescriptor.getDescData(0, 0), objectsUBDescriptor.getDescData(0, 1), shadowView.getDescData(0, 2)},
+                       { sceneDataUBDescriptor.getDescData(0, 0), objectsUBDescriptor.getDescData(0, 1), shadowView.getDescData(0, 2), textureBundle.getDescData(0, 3) },
                        { createColorAttachment () },
                        { createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f})},
                        { createDepthAttachment () },
@@ -161,7 +165,7 @@ class VulkanRenderer {
         std::cout << "Vertex buffer size: " << MAX_VERTEX_NUMBER * vertexSize << std::endl;
         std::cout << "Index buffer size: " << MAX_INDEX_NUMBER * indexSize << std::endl;
         std::cout << "Objects UB size: " << MAX_OBJECTS_UB * uboAlignedSize << std::endl;
-        std::cout << "Scene data UB size: " << MAX_SCENE_DATA * sizeof (SceneUBO)
+        std::cout << "Scene data UB size: " << MAX_SCENE_DATA * sizeof (VulkanSceneUBO)
                   << std::endl;
     }
 
@@ -172,9 +176,10 @@ class VulkanRenderer {
         const auto& meshVertices = mesh.getVertices ();
         const auto& meshNormals  = mesh.getNormals ();
         const auto& meshIndices  = mesh.getTriangles ();
+        const auto& meshUVs      = mesh.getUVs ();
 
         for (size_t i = 0; i < meshVertices.size (); ++i) {
-            vertices.push_back ({ meshVertices[i], { 1.0f, 1.0f, 1.0f }, meshNormals[i] });
+            vertices.push_back ({ meshVertices[i], { 1.0f, 1.0f, 1.0f }, meshNormals[i], meshUVs[i] });
         }
         indices.insert (indices.end (), meshIndices.begin (), meshIndices.end ());
 
@@ -190,9 +195,9 @@ class VulkanRenderer {
         return meshPool.size () - 1;
     }
 
-    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform) {
+    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform, uint16_t textureIndex) {
         drawCallMeshIndices.push_back (meshIndex);
-        ubos.push_back ({ transform });
+        ubos.push_back ({transform, textureIndex});
     }
 
     void initSceneData (const glm::mat4 view, const glm::vec3 lightDir, const glm::vec3 lightColor) {
@@ -202,8 +207,8 @@ class VulkanRenderer {
                           (float)mainSurface.getCapabilities ().currentExtent.height,
                           0.1f, 100.0f);
         proj[1][1] *= -1;
-        sceneData = SceneUBO (view, proj, lightDir, lightColor, { 0, 0, 0 });
-        sceneDataUB.update (&sceneData, sizeof (SceneUBO), 0);
+        sceneData = VulkanSceneUBO (view, proj, lightDir, lightColor, { 0, 0, 0 });
+        sceneDataUB.update (&sceneData, sizeof (VulkanSceneUBO), 0);
     }
 
     void drawFrame () {
@@ -221,6 +226,10 @@ class VulkanRenderer {
         drawCallMeshIndices.clear ();
     }
 
+    uint16_t loadTexture (const std::string& texturePath) {
+        return textureBundle.addTexture (texturePath);
+    }
+
     ~VulkanRenderer () {
         destroy ();
     }
@@ -230,6 +239,7 @@ class VulkanRenderer {
             return;
         }
         vkDeviceWaitIdle (device.getDevice ());
+        
         shadowImageDrawer.destroy();
         mainImageDrawer.destroy ();
         sceneDataUBDescriptor.destroy ();
@@ -241,6 +251,7 @@ class VulkanRenderer {
         swapchain.destroy ();
         mainSurface.destroy ();
         shadowView.destroy ();
+        textureBundle.destroy ();
         device.destroy ();
         instance.destroy ();
     }

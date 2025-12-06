@@ -27,7 +27,7 @@ int main() {
     VulkanRenderer renderer(window, width, height);
 
     Mesh tetrahedron = importMesh("teapot.fbx");
-    renderer.initSceneData(view, {0.0f, 3.0f, 10.0f}, {0.2f, 0.9f, 0.3f});
+    renderer.initSceneData(view, {0.0f, 3.0f, 10.0f}, {0.5f, 0.5f, 0.5f});
 
     uint32_t teapotIndex = renderer.loadMesh(tetrahedron);
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.3f, 0, -3.0f));
@@ -43,6 +43,10 @@ int main() {
 
     float elapsedTime = 0;
     auto lastTime = Clock::now();
+
+    uint16_t poolTexIndex = renderer.loadTexture("textures/pooltex.jpg");
+    Debug::Log("Loaded pool texture at index: " + std::to_string(poolTexIndex));
+    int porcelainTexIndex = renderer.loadTexture("textures/porcelain.jpg");
     while (!glfwWindowShouldClose(window)) {
         auto currentTime = Clock::now();
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count(); // in seconds
@@ -51,10 +55,9 @@ int main() {
 
         
         //Debug::Log(std::to_string(1 / deltaTime));
-        renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::mat4(1.0f), {2*cos(elapsedTime), -1.0f, -4.0f + 2*sin(elapsedTime)}), elapsedTime, {0.0f, 1.0f, 0.0f}));
-        renderer.addMeshDrawCall(sphereIndex, sphereModel);
-         //renderer.addMeshDrawCall(quadIndex, glm::rotate(glm::translate(glm::mat4(1.0f), {0.0f, sin(elapsedTime), -4.0f + cos(elapsedTime)}), elapsedTime, {0.0f, 1.0f, 0.0f}));
-        renderer.addMeshDrawCall(quadIndex, quadModel);
+        renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::mat4(1.0f), {2*cos(elapsedTime), -1.0f, -4.0f + 2*sin(elapsedTime)}), elapsedTime, {0.0f, 1.0f, 0.0f}), porcelainTexIndex);
+        renderer.addMeshDrawCall(sphereIndex, sphereModel, poolTexIndex);
+        renderer.addMeshDrawCall(quadIndex, quadModel, poolTexIndex);
         renderer.drawFrame();
         glfwPollEvents();
     }

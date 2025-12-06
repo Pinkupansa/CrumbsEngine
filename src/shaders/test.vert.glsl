@@ -3,9 +3,11 @@
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec3 inNormal;
+layout(location = 3) in vec2 inUV;
 
 layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec3 fragWorldPos;
+layout(location = 2) out vec2 fragUV;
 
 // Scene UBO (set = 0)
 layout(set = 0, binding = 0) uniform SceneUBO {
@@ -20,6 +22,7 @@ layout(set = 0, binding = 0) uniform SceneUBO {
 // Per-object UBO (set = 1, dynamic)
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
+    int textureIndex;
 } object;
 
 
@@ -32,4 +35,5 @@ void main() {
     fragWorldPos = worldPos.xyz;
     gl_Position = scene.proj * scene.view * worldPos;
     //gl_Position = scene.lightProj * scene.lightView * worldPos;
+    fragUV = inUV;
 }

@@ -1,5 +1,5 @@
 #pragma once
-#include "vertex.hpp"
+#include "vulkan_vertex.hpp"
 #include "vulkan_device.hpp"
 #include <cstring>
 #include <stdexcept>
@@ -9,7 +9,8 @@
 enum class VulkanBufferType {
     Vertex,
     Index,
-    Uniform
+    Uniform,
+    Staging
 };
 #include "vulkan_object_creation_utils.hpp"
 

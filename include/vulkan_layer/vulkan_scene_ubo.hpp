@@ -21,7 +21,7 @@ inline glm::mat4 computeLightView(const glm::vec3& lightDir,
 }
 
 // UBO de scène pour Vulkan
-struct SceneUBO {
+struct VulkanSceneUBO {
     glm::mat4 view;         // caméra principale
     glm::mat4 proj;         // projection principale
     glm::mat4 lightView;    // vue de la lumière
@@ -30,7 +30,7 @@ struct SceneUBO {
     alignas(16) glm::vec3 lightDir;   // normalized light direction in world space
 
     // Constructeur par défaut
-    SceneUBO()
+    VulkanSceneUBO()
         : view(1.0f)
         , proj(1.0f)
         , lightView(1.0f)
@@ -39,7 +39,7 @@ struct SceneUBO {
     {}
 
     // Constructeur avec paramètres
-    SceneUBO(const glm::mat4& camView,
+    VulkanSceneUBO(const glm::mat4& camView,
              const glm::mat4& camProj,
              const glm::vec3& lightDirParam,
              const glm::vec3& lightCol,

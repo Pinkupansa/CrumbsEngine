@@ -4,7 +4,8 @@
 #include "vulkan_device.hpp"
 #include "vulkan_surface.hpp"
 #include <vulkan/vulkan.hpp>
-
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
 VkImage createImage (const VulkanDevice& device,
                      VkExtent2D extent,
                      VkFormat format,
@@ -230,6 +231,9 @@ VkBuffer createBuffer (const VulkanDevice& device,
     case VulkanBufferType::Uniform:
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         break;
+    case VulkanBufferType::Staging:
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        break;
     }
 
     VkBuffer buffer;
@@ -242,11 +246,12 @@ VkBuffer createBuffer (const VulkanDevice& device,
 VkDescriptorSetLayout createDescriptorLayout (const VulkanDevice& device,
                                               VkDescriptorType descriptorType,
                                               VkShaderStageFlags shaderStageFlags,
-                                              uint32_t binding) {
+                                              uint32_t binding, uint32_t descriptorCount = 1) {
+
     VkDescriptorSetLayoutBinding layoutBinding;
     layoutBinding.binding            = binding;
     layoutBinding.descriptorType     = descriptorType;
-    layoutBinding.descriptorCount    = 1;
+    layoutBinding.descriptorCount    = descriptorCount;
     layoutBinding.stageFlags         = shaderStageFlags;
     layoutBinding.pImmutableSamplers = nullptr;
 
@@ -265,16 +270,17 @@ VkDescriptorSetLayout createDescriptorLayout (const VulkanDevice& device,
 }
 
 VkDescriptorPool createDescriptorPool (const VulkanDevice& device,
-                                       VkDescriptorType descriptorType) {
+                                       VkDescriptorType descriptorType, uint32_t descriptorCount = 1) {
     VkDescriptorPoolSize poolSize{};
     poolSize.type            = descriptorType;
-    poolSize.descriptorCount = 1;
+    poolSize.descriptorCount = descriptorCount;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes    = &poolSize;
     poolInfo.maxSets       = 1;
+
     VkDescriptorPool pool;
     if (vkCreateDescriptorPool (device.getDevice (), &poolInfo, nullptr, &pool) != VK_SUCCESS)
         throw std::runtime_error ("Failed to create descriptor pool!");
@@ -341,6 +347,27 @@ void writeImageSamplerInDescriptorSet (const VulkanDevice& device,
         shadowWrite.pImageInfo      = &shadowInfo;
 
         vkUpdateDescriptorSets (device.getDevice (), 1, &shadowWrite, 0, nullptr);
+}
+
+void writeImageSamplersInDescriptorSet (const VulkanDevice& device, 
+                                        const std::vector<VkImageView>& imageViews, 
+                                        const std::vector<VkSampler>& samplers,
+                                        const VkDescriptorSet& descSet){
+    std::vector<VkDescriptorImageInfo> imageInfos(imageViews.size());
+    for(size_t i=0; i<imageViews.size(); i++){
+        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[i].imageView   = imageViews[i];
+        imageInfos[i].sampler     = samplers[i];
+    }
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet          = descSet;
+    descriptorWrite.dstBinding      = 0;
+    descriptorWrite.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrite.descriptorCount = static_cast<uint32_t>(imageViews.size());
+    descriptorWrite.pImageInfo      = imageInfos.data();
+    vkUpdateDescriptorSets (device.getDevice (), 1, &descriptorWrite, 0, nullptr);
 }
 
 VkShaderModule createShaderModule (std::vector<char> code, const VkDevice& device) {
@@ -585,8 +612,8 @@ VkClearValue createDepthClearValue (VkClearDepthStencilValue depthValue) {
 VkSampler createSampler (const VulkanDevice& device) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter               = VK_FILTER_NEAREST;
-    samplerInfo.minFilter               = VK_FILTER_NEAREST;
+    samplerInfo.magFilter               = VK_FILTER_LINEAR;
+    samplerInfo.minFilter               = VK_FILTER_LINEAR;
     samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -598,4 +625,183 @@ VkSampler createSampler (const VulkanDevice& device) {
     VkSampler sampler;
     vkCreateSampler (device.getDevice (), &samplerInfo, nullptr, &sampler);
     return sampler;
+}
+
+void createBufferWithData (const VulkanDevice& device,
+                           VulkanBufferType type,
+                           VkDeviceSize bufferSize,
+                           const void* data,
+                           VkBuffer& buffer,
+                           VkDeviceMemory& bufferMemory,
+                           std::string name) {
+    buffer = createBuffer (device, type, bufferSize, name + " Buffer");
+    bufferMemory = allocateAndBindBufferMemory (device, buffer);
+
+    // map memory and copy data
+    void* mappedData;
+    vkMapMemory (device.getDevice (), bufferMemory, 0, bufferSize, 0, &mappedData);
+    memcpy (mappedData, data, static_cast<size_t> (bufferSize));
+    vkUnmapMemory (device.getDevice (), bufferMemory);
+
+    device.nameObject ((uint64_t)bufferMemory, VK_OBJECT_TYPE_DEVICE_MEMORY, name + " Buffer Memory");
+}
+VkCommandBuffer beginSingleTimeCommands(VulkanDevice const& device, std::string name) {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = device.getCommandPool();
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(device.getDevice(), &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    device.nameObject((uint64_t)commandBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, name);
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    
+    return commandBuffer;
+}
+
+void endSingleTimeCommands(const VulkanDevice& device, VkCommandBuffer commandBuffer) {
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(device.getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(device.getGraphicsQueue());
+
+    vkFreeCommandBuffers(device.getDevice(), device.getCommandPool(), 1, &commandBuffer);
+}
+
+
+void transitionImageLayout (const VulkanDevice& device,
+                           VkImage image,
+                           VkFormat format,
+                           VkImageLayout oldLayout,
+                           VkImageLayout newLayout) {
+    
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands (device, "Image Layout Transition");
+    VkImageMemoryBarrier barrier{};
+    barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout           = oldLayout;
+    barrier.newLayout           = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image               = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;                       
+    barrier.subresourceRange.baseMipLevel   = 0;
+    barrier.subresourceRange.levelCount     = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount     = 1;
+
+    VkPipelineStageFlags sourceStage;
+    VkPipelineStageFlags destinationStage;
+
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+} else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+} else {
+    throw std::invalid_argument("unsupported layout transition!");
+}
+
+    vkCmdPipelineBarrier (commandBuffer,
+                          sourceStage, destinationStage,
+                          0,
+                          0, nullptr,
+                          0, nullptr,
+                          1, &barrier);
+
+    endSingleTimeCommands (device, commandBuffer);
+}
+
+void copyBufferToImage (const VulkanDevice& device,
+                        VkBuffer buffer,
+                        VkImage image,
+                        uint32_t width,
+                        uint32_t height) {
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands (device, "Copy Buffer To Image");
+
+    VkBufferImageCopy region{};
+    region.bufferOffset      = 0;
+    region.bufferRowLength   = 0;
+    region.bufferImageHeight = 0;
+
+    region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel       = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount     = 1;
+
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = { width, height, 1 };
+
+    vkCmdCopyBufferToImage (commandBuffer,
+                            buffer,
+                            image,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            1,
+                            &region);
+
+    endSingleTimeCommands (device, commandBuffer);
+}
+
+VkImage createImageFromFile(const VulkanDevice& device,
+                               const std::string& filename,
+                               VkFormat format,
+                               VkImageUsageFlags usage,
+                               VkDeviceMemory& imageMemory,
+                               std::string name) {
+    int texWidth, texHeight, texChannels;
+    stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+    if (!pixels) {
+        throw std::runtime_error("Failed to load texture image!");
+    }
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBufferWithData(device, VulkanBufferType::Staging, imageSize, pixels,
+                         stagingBuffer, stagingBufferMemory, "Texture Staging Buffer");
+
+    stbi_image_free(pixels);
+
+    VkImage textureImage = createImage(device,
+                                       {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight)},
+                                       format,
+                                       usage,
+                                       name);
+
+    imageMemory = allocateAndBindImageMemory(device, textureImage);
+
+    transitionImageLayout(device, textureImage, format,
+                          VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    copyBufferToImage(device, stagingBuffer, textureImage,
+                      static_cast<uint32_t>(texWidth),
+                      static_cast<uint32_t>(texHeight));
+
+    transitionImageLayout(device, textureImage, format,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    vkDestroyBuffer(device.getDevice(), stagingBuffer, nullptr);
+    vkFreeMemory(device.getDevice(), stagingBufferMemory, nullptr);
+
+    return textureImage;
 }

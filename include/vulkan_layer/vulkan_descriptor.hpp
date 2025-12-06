@@ -1,5 +1,5 @@
 #pragma once
-#include "ubo.hpp"
+#include "vulkan_ubo.hpp"
 #include "vulkan_buffer.hpp"
 #include "vulkan_device.hpp"
 #include <vulkan/vulkan.h>

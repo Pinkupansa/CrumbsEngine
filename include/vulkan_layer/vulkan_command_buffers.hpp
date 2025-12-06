@@ -1,5 +1,5 @@
 #pragma once
-#include "mesh_draw_info.hpp"
+#include "vulkan_mesh_draw_info.hpp"
 #include "vulkan_buffer.hpp"
 #include "vulkan_descriptor.hpp"
 #include "vulkan_device.hpp"

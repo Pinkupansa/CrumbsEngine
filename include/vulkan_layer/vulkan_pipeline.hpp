@@ -1,5 +1,5 @@
 #pragma once
-#include "vertex.hpp"
+#include "vulkan_vertex.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_object_creation_utils.hpp"
 #include "vulkan_render_pass.hpp"
@@ -98,6 +98,7 @@ class VulkanPipeline {
         
         for(auto desc: descriptors){
             if(descLayouts[desc.set] != nullptr){
+                
                 throw std::runtime_error("ERROR : Two descriptor sets have the same set number !");
             }
             descLayouts[desc.set] = desc.layout;
