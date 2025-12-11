@@ -193,8 +193,8 @@ VkAttachmentDescription createDepthAttachment () {
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     return depthAttachment;
 }
-VkAttachmentDescription createShadowDepthAttachment(){
-   VkAttachmentDescription depthAttachment{};
+VkAttachmentDescription createShadowDepthAttachment () {
+    VkAttachmentDescription depthAttachment{};
     depthAttachment.format = DEFAULT_DEPTH_FORMAT; // the same format as your depth image
     depthAttachment.samples = MSAA_LEVEL;
     depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -202,8 +202,8 @@ VkAttachmentDescription createShadowDepthAttachment(){
     depthAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    return depthAttachment; 
+    depthAttachment.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    return depthAttachment;
 }
 VkAttachmentReference createDepthAttachmentRef (int attachmentNumber) {
     VkAttachmentReference depthAttachmentRef{};
@@ -246,7 +246,10 @@ VkBuffer createBuffer (const VulkanDevice& device,
 VkDescriptorSetLayout createDescriptorLayout (const VulkanDevice& device,
                                               VkDescriptorType descriptorType,
                                               VkShaderStageFlags shaderStageFlags,
-                                              uint32_t binding, uint32_t descriptorCount = 1) {
+                                              uint32_t binding,
+                                              uint32_t descriptorCount = 1,
+                                              VkDescriptorBindingFlags bindingFlags = 0) {
+
 
     VkDescriptorSetLayoutBinding layoutBinding;
     layoutBinding.binding            = binding;
@@ -255,13 +258,22 @@ VkDescriptorSetLayout createDescriptorLayout (const VulkanDevice& device,
     layoutBinding.stageFlags         = shaderStageFlags;
     layoutBinding.pImmutableSamplers = nullptr;
 
-    // second binding will be texture to sample
+    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{};
+    if (bindingFlags != 0) {
+        bindingFlagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        bindingFlagsInfo.bindingCount  = 1;
+        bindingFlagsInfo.pBindingFlags = &bindingFlags;
+    }
+
 
     // layout from all the bindings created
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings    = &layoutBinding;
+    if (bindingFlags != 0) {
+        layoutInfo.pNext = &bindingFlagsInfo;
+    }
 
     VkDescriptorSetLayout layout;
     if (vkCreateDescriptorSetLayout (device.getDevice (), &layoutInfo, nullptr, &layout) != VK_SUCCESS)
@@ -269,8 +281,10 @@ VkDescriptorSetLayout createDescriptorLayout (const VulkanDevice& device,
     return layout;
 }
 
+
 VkDescriptorPool createDescriptorPool (const VulkanDevice& device,
-                                       VkDescriptorType descriptorType, uint32_t descriptorCount = 1) {
+                                       VkDescriptorType descriptorType,
+                                       uint32_t descriptorCount = 1) {
     VkDescriptorPoolSize poolSize{};
     poolSize.type            = descriptorType;
     poolSize.descriptorCount = descriptorCount;
@@ -290,13 +304,22 @@ VkDescriptorPool createDescriptorPool (const VulkanDevice& device,
 VkDescriptorSet allocateDescriptorSet (const VulkanDevice& device,
                                        const VkDescriptorSetLayout& layout,
                                        const VkDescriptorPool& pool,
-                                       std::string name) {
+                                       std::string name, uint32_t actualCount = 0, bool isVariableCount = false) {
 
+    VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountInfo{};
+    if (isVariableCount) {
+        variableDescCountInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+        variableDescCountInfo.descriptorSetCount = 1;
+        variableDescCountInfo.pDescriptorCounts    = &actualCount;
+    }
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = pool;
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts        = &layout;
+    if (isVariableCount) {
+        allocInfo.pNext = &variableDescCountInfo;
+    }
     VkDescriptorSet descriptorSet;
     if (vkAllocateDescriptorSets (device.getDevice (), &allocInfo, &descriptorSet) != VK_SUCCESS)
         throw std::runtime_error ("Failed to allocate descriptor set!");
@@ -329,47 +352,49 @@ void writeBufferInDescriptorSet (const VulkanDevice& device,
 }
 
 void writeImageSamplerInDescriptorSet (const VulkanDevice& device,
-                                const VkImageView& imageView,
-                                const VkSampler& sampler,
-                                const VkDescriptorSet& descSet){
-        
-        VkDescriptorImageInfo shadowInfo{};
-        shadowInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        shadowInfo.imageView   = imageView; // your shadow depth view
-        shadowInfo.sampler     = sampler;   // sampler
+                                       const VkImageView& imageView,
+                                       const VkSampler& sampler,
+                                       const VkDescriptorSet& descSet) {
 
-        VkWriteDescriptorSet shadowWrite{};
-        shadowWrite.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        shadowWrite.dstSet          = descSet;
-        shadowWrite.dstBinding      = 0;
-        shadowWrite.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        shadowWrite.descriptorCount = 1;
-        shadowWrite.pImageInfo      = &shadowInfo;
+    VkDescriptorImageInfo shadowInfo{};
+    shadowInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    shadowInfo.imageView   = imageView; // your shadow depth view
+    shadowInfo.sampler     = sampler;   // sampler
 
-        vkUpdateDescriptorSets (device.getDevice (), 1, &shadowWrite, 0, nullptr);
+    VkWriteDescriptorSet shadowWrite{};
+    shadowWrite.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    shadowWrite.dstSet          = descSet;
+    shadowWrite.dstBinding      = 0;
+    shadowWrite.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    shadowWrite.descriptorCount = 1;
+    shadowWrite.pImageInfo      = &shadowInfo;
+
+    vkUpdateDescriptorSets (device.getDevice (), 1, &shadowWrite, 0, nullptr);
 }
 
-void writeImageSamplersInDescriptorSet (const VulkanDevice& device, 
-                                        const std::vector<VkImageView>& imageViews, 
-                                        const std::vector<VkSampler>& samplers,
-                                        const VkDescriptorSet& descSet){
-    std::vector<VkDescriptorImageInfo> imageInfos(imageViews.size());
-    for(size_t i=0; i<imageViews.size(); i++){
-        imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[i].imageView   = imageViews[i];
-        imageInfos[i].sampler     = samplers[i];
-    }
+void writeImageSamplerInDescriptorSetArray (const VulkanDevice& device,
+                                            const VkImageView& imageView,
+                                            const VkSampler& sampler,
+                                            const VkDescriptorSet& descSet,
+                                            uint32_t binding,
+                                            uint32_t arrayElement) {
 
-    VkWriteDescriptorSet descriptorWrite{};
-    descriptorWrite.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet          = descSet;
-    descriptorWrite.dstBinding      = 0;
-    descriptorWrite.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    descriptorWrite.descriptorCount = static_cast<uint32_t>(imageViews.size());
-    descriptorWrite.pImageInfo      = imageInfos.data();
-    vkUpdateDescriptorSets (device.getDevice (), 1, &descriptorWrite, 0, nullptr);
+    VkDescriptorImageInfo textureInfo{};
+    textureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    textureInfo.imageView   = imageView; // your texture image view
+    textureInfo.sampler     = sampler;   // sampler
+
+    VkWriteDescriptorSet textureWrite{};
+    textureWrite.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    textureWrite.dstSet          = descSet;
+    textureWrite.dstBinding      = binding;
+    textureWrite.dstArrayElement = arrayElement;
+    textureWrite.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    textureWrite.descriptorCount = 1;
+    textureWrite.pImageInfo      = &textureInfo;
+
+    vkUpdateDescriptorSets (device.getDevice (), 1, &textureWrite, 0, nullptr);
 }
-
 VkShaderModule createShaderModule (std::vector<char> code, const VkDevice& device) {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -609,7 +634,7 @@ VkClearValue createDepthClearValue (VkClearDepthStencilValue depthValue) {
     return clearValue;
 }
 
-VkSampler createSampler (const VulkanDevice& device) {
+VkSampler createSampler (const VulkanDevice& device, std::string name) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter               = VK_FILTER_LINEAR;
@@ -624,6 +649,8 @@ VkSampler createSampler (const VulkanDevice& device) {
 
     VkSampler sampler;
     vkCreateSampler (device.getDevice (), &samplerInfo, nullptr, &sampler);
+
+    device.nameObject ((uint64_t)sampler, VK_OBJECT_TYPE_SAMPLER, name);
     return sampler;
 }
 
@@ -634,7 +661,7 @@ void createBufferWithData (const VulkanDevice& device,
                            VkBuffer& buffer,
                            VkDeviceMemory& bufferMemory,
                            std::string name) {
-    buffer = createBuffer (device, type, bufferSize, name + " Buffer");
+    buffer       = createBuffer (device, type, bufferSize, name + " Buffer");
     bufferMemory = allocateAndBindBufferMemory (device, buffer);
 
     // map memory and copy data
@@ -643,50 +670,52 @@ void createBufferWithData (const VulkanDevice& device,
     memcpy (mappedData, data, static_cast<size_t> (bufferSize));
     vkUnmapMemory (device.getDevice (), bufferMemory);
 
-    device.nameObject ((uint64_t)bufferMemory, VK_OBJECT_TYPE_DEVICE_MEMORY, name + " Buffer Memory");
+    device.nameObject ((uint64_t)bufferMemory, VK_OBJECT_TYPE_DEVICE_MEMORY,
+                       name + " Buffer Memory");
 }
-VkCommandBuffer beginSingleTimeCommands(VulkanDevice const& device, std::string name) {
+VkCommandBuffer beginSingleTimeCommands (VulkanDevice const& device, std::string name) {
     VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = device.getCommandPool();
+    allocInfo.sType       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = device.getCommandPool ();
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(device.getDevice(), &allocInfo, &commandBuffer);
+    vkAllocateCommandBuffers (device.getDevice (), &allocInfo, &commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    device.nameObject((uint64_t)commandBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, name);
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    device.nameObject ((uint64_t)commandBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, name);
+    vkBeginCommandBuffer (commandBuffer, &beginInfo);
 
-    
+
     return commandBuffer;
 }
 
-void endSingleTimeCommands(const VulkanDevice& device, VkCommandBuffer commandBuffer) {
-    vkEndCommandBuffer(commandBuffer);
+void endSingleTimeCommands (const VulkanDevice& device, VkCommandBuffer commandBuffer) {
+    vkEndCommandBuffer (commandBuffer);
 
     VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.pCommandBuffers    = &commandBuffer;
 
-    vkQueueSubmit(device.getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(device.getGraphicsQueue());
+    vkQueueSubmit (device.getGraphicsQueue (), 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle (device.getGraphicsQueue ());
 
-    vkFreeCommandBuffers(device.getDevice(), device.getCommandPool(), 1, &commandBuffer);
+    vkFreeCommandBuffers (device.getDevice (), device.getCommandPool (), 1, &commandBuffer);
 }
 
 
 void transitionImageLayout (const VulkanDevice& device,
-                           VkImage image,
-                           VkFormat format,
-                           VkImageLayout oldLayout,
-                           VkImageLayout newLayout) {
-    
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands (device, "Image Layout Transition");
+                            VkImage image,
+                            VkFormat format,
+                            VkImageLayout oldLayout,
+                            VkImageLayout newLayout) {
+
+    VkCommandBuffer commandBuffer =
+    beginSingleTimeCommands (device, "Image Layout Transition");
     VkImageMemoryBarrier barrier{};
     barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     barrier.oldLayout           = oldLayout;
@@ -694,7 +723,7 @@ void transitionImageLayout (const VulkanDevice& device,
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image               = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;                       
+    barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel   = 0;
     barrier.subresourceRange.levelCount     = 1;
     barrier.subresourceRange.baseArrayLayer = 0;
@@ -703,28 +732,48 @@ void transitionImageLayout (const VulkanDevice& device,
     VkPipelineStageFlags sourceStage;
     VkPipelineStageFlags destinationStage;
 
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-} else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        sourceStage      = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+               newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-} else {
-    throw std::invalid_argument("unsupported layout transition!");
-}
+        sourceStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+               newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-    vkCmdPipelineBarrier (commandBuffer,
-                          sourceStage, destinationStage,
-                          0,
-                          0, nullptr,
-                          0, nullptr,
-                          1, &barrier);
+        sourceStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+               newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        sourceStage      = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        sourceStage      = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else {
+        throw std::invalid_argument ("Unsupported layout transition!");
+    }
+
+    vkCmdPipelineBarrier (commandBuffer, sourceStage, destinationStage, 0, 0,
+                          nullptr, 0, nullptr, 1, &barrier);
 
     endSingleTimeCommands (device, commandBuffer);
 }
@@ -749,59 +798,161 @@ void copyBufferToImage (const VulkanDevice& device,
     region.imageOffset = { 0, 0, 0 };
     region.imageExtent = { width, height, 1 };
 
-    vkCmdCopyBufferToImage (commandBuffer,
-                            buffer,
-                            image,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            1,
-                            &region);
+    vkCmdCopyBufferToImage (commandBuffer, buffer, image,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
     endSingleTimeCommands (device, commandBuffer);
 }
 
-VkImage createImageFromFile(const VulkanDevice& device,
-                               const std::string& filename,
-                               VkFormat format,
-                               VkImageUsageFlags usage,
-                               VkDeviceMemory& imageMemory,
-                               std::string name) {
-    int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load(filename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+VkImage createImageFromFile (const VulkanDevice& device,
+                             const std::string& filename,
+                             VkFormat format,
+                             VkImageUsageFlags usage,
+                             VkDeviceMemory& imageMemory,
+                             std::string name, int& texWidth, int& texHeight) {
+    int texChannels;
+    stbi_uc* pixels =
+    stbi_load (filename.c_str (), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
-        throw std::runtime_error("Failed to load texture image!");
+        throw std::runtime_error ("Failed to load texture image!");
     }
-
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    createBufferWithData(device, VulkanBufferType::Staging, imageSize, pixels,
-                         stagingBuffer, stagingBufferMemory, "Texture Staging Buffer");
+    createBufferWithData (device, VulkanBufferType::Staging, imageSize, pixels,
+                          stagingBuffer, stagingBufferMemory, "Texture Staging Buffer");
 
-    stbi_image_free(pixels);
+    stbi_image_free (pixels);
 
-    VkImage textureImage = createImage(device,
-                                       {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight)},
-                                       format,
-                                       usage,
-                                       name);
+    // Ensure the image is created with TRANSFER_DST and TRANSFER_SRC usage so
+    // we can transition it to TRANSFER_SRC_OPTIMAL later when copying from it
+    // into an atlas or another image. Also include any usage flags requested
+    // by the caller (for example VK_IMAGE_USAGE_SAMPLED_BIT).
+    VkImage textureImage =
+    createImage (device, { static_cast<uint32_t> (texWidth), static_cast<uint32_t> (texHeight) },
+                 format, usage, name);
 
-    imageMemory = allocateAndBindImageMemory(device, textureImage);
+    imageMemory = allocateAndBindImageMemory (device, textureImage);
 
-    transitionImageLayout(device, textureImage, format,
-                          VK_IMAGE_LAYOUT_UNDEFINED,
+    transitionImageLayout (device, textureImage, format, VK_IMAGE_LAYOUT_UNDEFINED,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        // Loads an image from disk and uploads it into a GPU image. Optionally downscales
+        // the image on the CPU before upload by specifying targetWidth/targetHeight.
+        // texWidth/texHeight are set to the final (possibly resized) dimensions.
+        int targetWidth = 0; // Default target width
+        int targetHeight = 0; // Default target height
+        // If only one target dimension is provided, preserve aspect ratio
+        if (targetWidth > 0 && targetHeight == 0) {
+            targetHeight = static_cast<int>(std::round((float)texHeight * (float)targetWidth / (float)texWidth));
+        } else if (targetHeight > 0 && targetWidth == 0) {
+            targetWidth = static_cast<int>(std::round((float)texWidth * (float)targetHeight / (float)texHeight));
+        }
+        // Additional code for resizing and uploading pixels...
+
+    copyBufferToImage (device, stagingBuffer, textureImage, static_cast<uint32_t> (texWidth),
+                       static_cast<uint32_t> (texHeight));
+
+    transitionImageLayout (device, textureImage, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+    vkDestroyBuffer (device.getDevice (), stagingBuffer, nullptr);
+    vkFreeMemory (device.getDevice (), stagingBufferMemory, nullptr);
+
+    //downscale image so that its max dimension is lowered to the closest power of two less than or equal to 512
+    
+
+    return textureImage;
+}
+
+
+void copyImage(const VulkanDevice& device, VkImage src, VkImage dst, VkExtent3D extent, VkOffset3D offset) {
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands(device, "Copy Image");
+
+    VkImageSubresourceLayers subResource{};
+    subResource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    subResource.baseArrayLayer = 0;
+    subResource.mipLevel       = 0;
+    subResource.layerCount     = 1;
+
+    VkImageCopy copyRegion{};
+    copyRegion.srcSubresource = subResource;
+    copyRegion.dstSubresource = subResource;
+    copyRegion.extent         = extent;
+    copyRegion.dstOffset      = offset;
+
+    transitionImageLayout(device, dst, DEFAULT_COLOR_FORMAT,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    copyBufferToImage(device, stagingBuffer, textureImage,
-                      static_cast<uint32_t>(texWidth),
-                      static_cast<uint32_t>(texHeight));
+    vkCmdCopyImage(commandBuffer,
+                   src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1, &copyRegion);
 
-    transitionImageLayout(device, textureImage, format,
+    endSingleTimeCommands(device, commandBuffer);
+
+    transitionImageLayout(device, dst, DEFAULT_COLOR_FORMAT,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+VkImage blitDownsizedImage(
+    const VulkanDevice& device,
+    VkImage src,
+    VkFormat format,
+    uint32_t srcWidth,
+    uint32_t srcHeight,
+    uint32_t dstWidth,
+    uint32_t dstHeight,
+    VkDeviceMemory& imageMemory,
+    const char* name)
+{
+    // --- 1. Create destination image ---
+    VkExtent2D dstExtent = { dstWidth, dstHeight };
+
+    VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VkImage dst = createImage(device, dstExtent, format, usage, name);
+
+    imageMemory = allocateAndBindImageMemory(device, dst);
+
+    // --- 2. Transition ONLY the destination image ---
+    transitionImageLayout(device, dst, format,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // assumed initial
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // Source stays in TRANSFER_SRC_OPTIMAL the entire time.
+
+    // --- 3. Perform the blit ---
+    VkCommandBuffer cmd = beginSingleTimeCommands(device, "Blit Image");
+
+    VkImageBlit region{};
+    region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.srcSubresource.layerCount = 1;
+    region.srcOffsets[1] = { (int)srcWidth, (int)srcHeight, 1 };
+
+    region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.dstSubresource.layerCount = 1;
+    region.dstOffsets[1] = { (int)dstWidth, (int)dstHeight, 1 };
+
+    vkCmdBlitImage(cmd,
+        src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &region,
+        VK_FILTER_LINEAR);
+
+    endSingleTimeCommands(device, cmd);
+
+    // --- 4. Transition destination to shader-read layout ---
+    transitionImageLayout(device, dst, format,
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    vkDestroyBuffer(device.getDevice(), stagingBuffer, nullptr);
-    vkFreeMemory(device.getDevice(), stagingBufferMemory, nullptr);
+    // Source stays unchanged: still TRANSFER_SRC_OPTIMAL
 
-    return textureImage;
+    return dst;
 }

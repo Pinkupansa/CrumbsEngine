@@ -105,12 +105,20 @@ public:
             "VK_KHR_portability_subset" // required on macOS
         };
 
+        VkPhysicalDeviceDescriptorIndexingFeatures indexing{};
+        indexing.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+        indexing.descriptorBindingPartiallyBound = VK_TRUE;
+        indexing.runtimeDescriptorArray = VK_TRUE;                // usually needed
+        indexing.descriptorBindingVariableDescriptorCount = VK_TRUE;
+
+
         VkDeviceCreateInfo deviceCreateInfo{};
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         deviceCreateInfo.queueCreateInfoCount = 1;
         deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
         deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
         deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
+        deviceCreateInfo.pNext = &indexing;
 
         if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create logical device!");

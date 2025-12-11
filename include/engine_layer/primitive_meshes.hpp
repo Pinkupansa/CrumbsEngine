@@ -126,9 +126,10 @@ Mesh importMesh(std::string meshPath) {
     std::vector<uint32_t> indices;
     std::vector<glm::vec2> uvs;
 
+    Debug::Log("Importing mesh from " + meshPath + " with " + std::to_string(scene->mNumMeshes) + " meshes.");
     for (unsigned int m = 0; m < scene->mNumMeshes; ++m) {
         aiMesh* mesh = scene->mMeshes[m];
-
+        uint32_t baseVertexIndex = vertices.size();
         for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
             aiVector3D pos = mesh->mVertices[v];
             vertices.emplace_back(pos.x, pos.y, pos.z);
@@ -140,14 +141,14 @@ Mesh importMesh(std::string meshPath) {
                 aiVector3D uv = mesh->mTextureCoords[0][v];
                 uvs.emplace_back(uv.x, uv.y);
             } else {
-                uvs.emplace_back(0.0f);
+                uvs.emplace_back(0.0f, 0.0f);
             }
         }
 
         for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
             aiFace face = mesh->mFaces[f];
             for (unsigned int i = 0; i < face.mNumIndices; ++i)
-                indices.push_back(face.mIndices[i]);
+                indices.push_back(face.mIndices[i] + baseVertexIndex);
         }
     }
 

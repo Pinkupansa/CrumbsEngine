@@ -52,7 +52,7 @@ class VulkanShadowView  {
 
         // Create a sampler for sampling the shadow map in the fragment shader
 
-        shadowSampler = createSampler (device);
+        shadowSampler = createSampler (device, "Shadow Sampler");
 
         shadowDescLayout =
         createDescriptorLayout (device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,

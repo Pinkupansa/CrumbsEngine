@@ -3,5 +3,7 @@
 
 struct VulkanUniformBufferObject {
     glm::mat4 model;
-    int textureIndex = -1;
+    glm::vec2 atlasOffset;
+    glm::vec2 textureSize;
+    glm::vec2 tilingFactor; 
 };

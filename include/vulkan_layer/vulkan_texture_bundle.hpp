@@ -1,14 +1,15 @@
-#pragma once 
+#pragma once
 
-#include <vulkan/vulkan.h>
 #include "vulkan_device.hpp"
+#include <vulkan/vulkan.h>
 
-#include "vulkan_object_creation_utils.hpp"
 #include "vulkan_descriptor_data.hpp"
+#include "vulkan_object_creation_utils.hpp"
 #include <algorithm>
 
+
 class VulkanTextureBundle {
-private:
+    private:
     /*VkImage textureImage;
     VkDeviceMemory textureImageMemory;
     VkImageView textureImageView;
@@ -17,299 +18,289 @@ private:
     std::vector<VkImage> textureImages;
     std::vector<VkDeviceMemory> textureImageMemories;
     std::vector<VkImageView> textureImageViews;
-    std::vector<VkSampler> textureSamplers;
-    std::vector<bool> slotOccupied; // 0 = free, 1 = occupied
 
+
+    std::vector<VkOffset3D> textureAtlasCoords;
+    std::vector<VkExtent3D> textureSizes;
 
     VulkanDevice& device;
-    uint32_t capacity = 0;
 
     VkDescriptorSetLayout textureDescLayout;
     VkDescriptorPool textureDescPool;
     VkDescriptorSet textureDescSet;
 
-    // Resize descriptor set/pool/layout to a new capacity. Recreates layout/pool/set and
-    // re-writes existing occupied descriptors into the new set. Throws on failure.
-    void resizeCapacity(uint32_t newCapacity) {
-        if (newCapacity <= capacity) return;
+    VkImage textureAtlasImage;
+    VkDeviceMemory textureAtlasImageMemory;
+    VkImageView textureAtlasImageView;
+    VkSampler textureAtlasSampler;
 
-        // clamp to device limits
-        const auto& limits = device.getProperties().limits;
-        uint32_t samplerLimit = static_cast<uint32_t>(std::min(limits.maxPerStageDescriptorSamplers,
-                                                               limits.maxDescriptorSetSamplers));
-        if (newCapacity > samplerLimit) newCapacity = samplerLimit;
+    int atlasSize;
 
-        // create new layout
-        VkDescriptorSetLayoutBinding binding{};
-        binding.binding = 0;
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding.descriptorCount = newCapacity;
-        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        binding.pImmutableSamplers = nullptr;
+    public:
+    VulkanTextureBundle (VulkanDevice& deviceRef, int atlasSize)
+    : device (deviceRef), atlasSize (atlasSize) {
 
-        VkDescriptorSetLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &binding;
-        VkDescriptorSetLayout newLayout = VK_NULL_HANDLE;
-        if (vkCreateDescriptorSetLayout(device.getDevice(), &layoutInfo, nullptr, &newLayout) != VK_SUCCESS)
-            throw std::runtime_error("Failed to create resized descriptor set layout");
+        textureDescLayout =
+        createDescriptorLayout (device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+        textureDescPool =
+        createDescriptorPool (device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        textureDescSet =
+        allocateDescriptorSet (device, textureDescLayout, textureDescPool,
+                               "Texture Bundle Descriptor Set");
 
-        // create new pool
-        VkDescriptorPoolSize poolSize{};
-        poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSize.descriptorCount = newCapacity;
 
-        VkDescriptorPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &poolSize;
-        poolInfo.maxSets = 1;
-        VkDescriptorPool newPool = VK_NULL_HANDLE;
-        if (vkCreateDescriptorPool(device.getDevice(), &poolInfo, nullptr, &newPool) != VK_SUCCESS) {
-            vkDestroyDescriptorSetLayout(device.getDevice(), newLayout, nullptr);
-            throw std::runtime_error("Failed to create resized descriptor pool");
-        }
+        textureAtlasImage =
+        createImage (device, { (uint32_t)atlasSize, (uint32_t)atlasSize },
+                     DEFAULT_TEXTURE_COLOR_FORMAT,
+                     VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     "Texture Atlas Image");
+        textureAtlasImageMemory = allocateAndBindImageMemory (device, textureAtlasImage);
+        transitionImageLayout (device, textureAtlasImage,
+                               DEFAULT_TEXTURE_COLOR_FORMAT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        textureAtlasImageView =
+        createImageView (device, textureAtlasImage, DEFAULT_TEXTURE_COLOR_FORMAT,
+                         VK_IMAGE_ASPECT_COLOR_BIT, "Texture Atlas Image View");
 
-        // allocate new set
-        VkDescriptorSetAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-        allocInfo.descriptorPool = newPool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &newLayout;
-        VkDescriptorSet newSet = VK_NULL_HANDLE;
-        if (vkAllocateDescriptorSets(device.getDevice(), &allocInfo, &newSet) != VK_SUCCESS) {
-            vkDestroyDescriptorPool(device.getDevice(), newPool, nullptr);
-            vkDestroyDescriptorSetLayout(device.getDevice(), newLayout, nullptr);
-            throw std::runtime_error("Failed to allocate resized descriptor set");
-        }
-
-        // write existing occupied entries into new set (per-slot writes)
-        for (uint32_t i = 0; i < capacity; ++i) {
-            if (!slotOccupied[i]) continue;
-            VkDescriptorImageInfo imageInfo{};
-            imageInfo.sampler = textureSamplers[i];
-            imageInfo.imageView = textureImageViews[i];
-            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            VkWriteDescriptorSet write{};
-            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write.dstSet = newSet;
-            write.dstBinding = 0;
-            write.dstArrayElement = i;
-            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            write.descriptorCount = 1;
-            write.pImageInfo = &imageInfo;
-
-            vkUpdateDescriptorSets(device.getDevice(), 1, &write, 0, nullptr);
-        }
-
-        // swap in new resources, destroy old ones
-        VkDescriptorSetLayout oldLayout = textureDescLayout;
-        VkDescriptorPool oldPool = textureDescPool;
-        VkDescriptorSet oldSet = textureDescSet;
-
-        textureDescLayout = newLayout;
-        textureDescPool = newPool;
-        textureDescSet = newSet;
-        capacity = newCapacity;
-
-        if (oldSet != VK_NULL_HANDLE) {
-            // oldSet will be implicitly freed when pool is destroyed; destroy old pool and layout
-            if (oldPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(device.getDevice(), oldPool, nullptr);
-            if (oldLayout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device.getDevice(), oldLayout, nullptr);
-        }
-        // resize internal vectors to newCapacity, preserving existing entries
-        textureImages.resize(capacity, VK_NULL_HANDLE);
-        textureImageMemories.resize(capacity, VK_NULL_HANDLE);
-        textureImageViews.resize(capacity, VK_NULL_HANDLE);
-        textureSamplers.resize(capacity, VK_NULL_HANDLE);
-        slotOccupied.resize(capacity, 0);
+        textureAtlasSampler = createSampler (device, "Texture Atlas Sampler");
     }
 
-public:
-    VulkanTextureBundle(VulkanDevice& deviceRef, const std::vector<std::string>& filenames, uint32_t preallocate = 8)
-    : device(deviceRef) {
-        // determine capacity (at least initial count)
-        uint32_t initialCount = static_cast<uint32_t>(filenames.size());
-        uint32_t requested = preallocate < 1 ? 1 : preallocate;
 
-        // clamp requested capacity to device limits (sampler-related limits)
-        const auto& limits = device.getProperties().limits;
-        uint32_t samplerLimit = static_cast<uint32_t>(std::min(limits.maxPerStageDescriptorSamplers,
-                                                               limits.maxDescriptorSetSamplers));
-        if (samplerLimit == 0) {
-            throw std::runtime_error("Device reports zero sampler descriptor limit");
-        }
-
-        if (requested > samplerLimit) {
-            requested = samplerLimit;
-        }
-
-        capacity = requested;
-        if (capacity < initialCount) {
-            throw std::runtime_error("Initial texture count exceeds device sampler limits");
-        }
-
-        // allocate storage up to capacity and mark slots free
-        textureImages.resize(capacity, VK_NULL_HANDLE);
-        textureImageMemories.resize(capacity, VK_NULL_HANDLE);
-        textureImageViews.resize(capacity, VK_NULL_HANDLE);
-        textureSamplers.resize(capacity, VK_NULL_HANDLE);
-        slotOccupied.resize(capacity, 0);
-
-        // load initial textures into the first slots and mark them occupied
-        for (size_t i = 0; i < filenames.size(); ++i) {
-            VkDeviceMemory mem = VK_NULL_HANDLE;
-            VkImage img = createImageFromFile(device, filenames[i], VK_FORMAT_R8G8B8A8_SRGB,
-                                              VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                              mem, "Texture Image " + std::to_string(i));
-
-            VkImageView view = createImageView(device, img, VK_FORMAT_R8G8B8A8_SRGB,
-                                               VK_IMAGE_ASPECT_COLOR_BIT, "Texture Image View " + std::to_string(i));
-            VkSampler samp = createSampler(device);
-
-            textureImages[i] = img;
-            textureImageMemories[i] = mem;
-            textureImageViews[i] = view;
-            textureSamplers[i] = samp;
-            slotOccupied[i] = 1;
-        }
-
-        // create descriptor set layout with an array binding sized to capacity
-        VkDescriptorSetLayoutBinding binding{};
-        binding.binding = 0;
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding.descriptorCount = capacity; // array size / capacity
-        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        binding.pImmutableSamplers = nullptr;
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &binding;
-        if (vkCreateDescriptorSetLayout(device.getDevice(), &layoutInfo, nullptr, &textureDescLayout) != VK_SUCCESS)
-            throw std::runtime_error("Failed to create texture descriptor set layout");
-
-        // create pool capable of holding 'capacity' descriptors and 1 set
-        textureDescPool = createDescriptorPool(device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, capacity);    
-        // allocate descriptor set
-        textureDescSet = allocateDescriptorSet(device, textureDescLayout, textureDescPool,
-                                               "Texture Descriptor Set");
-        // initialize descriptor with the currently loaded textures (if any)
-        // write only the initial loaded range (occupied slots at the start)
-        uint32_t initialLoaded = 0;
-        for (uint32_t i = 0; i < capacity; ++i) if (slotOccupied[i]) ++initialLoaded;
-        if (initialLoaded > 0) {
-            // build small vectors with only the loaded entries in ascending order
-            std::vector<VkImageView> iv(initialLoaded);
-            std::vector<VkSampler> sm(initialLoaded);
-            for (uint32_t i = 0, j = 0; i < capacity; ++i) if (slotOccupied[i]) { iv[j] = textureImageViews[i]; sm[j] = textureSamplers[i]; ++j; }
-            writeImageSamplersInDescriptorSet(device, iv, sm, textureDescSet);
-        }
+    ~VulkanTextureBundle () {
+        destroy ();
     }
 
-    ~VulkanTextureBundle() {
-        destroy();
-    }
-
-    void destroy() {
-        //check and destroy all texture resources
-        for(size_t i=0; i<textureImages.size(); i++){
+    void destroy () {
+        // check and destroy all texture resources
+        for (size_t i = 0; i < textureImages.size (); i++) {
             if (textureImageViews[i] != VK_NULL_HANDLE)
-                vkDestroyImageView(device.getDevice(), textureImageViews[i], nullptr);
+                vkDestroyImageView (device.getDevice (), textureImageViews[i], nullptr);
             if (textureImages[i] != VK_NULL_HANDLE)
-                vkDestroyImage(device.getDevice(), textureImages[i], nullptr);
+                vkDestroyImage (device.getDevice (), textureImages[i], nullptr);
             if (textureImageMemories[i] != VK_NULL_HANDLE)
-                vkFreeMemory(device.getDevice(), textureImageMemories[i], nullptr);
-            if (textureSamplers[i] != VK_NULL_HANDLE)
-                vkDestroySampler(device.getDevice(), textureSamplers[i], nullptr);
-            
-            //set to null handles
-            textureImageViews[i] = VK_NULL_HANDLE;
-            textureImages[i] = VK_NULL_HANDLE;
+                vkFreeMemory (device.getDevice (), textureImageMemories[i], nullptr);
+
+            // set to null handles
+            textureImageViews[i]    = VK_NULL_HANDLE;
+            textureImages[i]        = VK_NULL_HANDLE;
             textureImageMemories[i] = VK_NULL_HANDLE;
-            textureSamplers[i] = VK_NULL_HANDLE;
         }
         if (textureDescLayout != VK_NULL_HANDLE)
-            vkDestroyDescriptorSetLayout(device.getDevice(), textureDescLayout, nullptr);
+            vkDestroyDescriptorSetLayout (device.getDevice (), textureDescLayout, nullptr);
         if (textureDescPool != VK_NULL_HANDLE)
-            vkDestroyDescriptorPool(device.getDevice(), textureDescPool, nullptr);
-        textureImages.clear();
-        textureImageMemories.clear();
-        textureImageViews.clear();
-        textureSamplers.clear();
+            vkDestroyDescriptorPool (device.getDevice (), textureDescPool, nullptr);
+        textureImages.clear ();
+        textureImageMemories.clear ();
+        textureImageViews.clear ();
 
-        //set to null handles
+        // set to null handles
         textureDescLayout = VK_NULL_HANDLE;
-        textureDescPool = VK_NULL_HANDLE;
-        textureDescSet = VK_NULL_HANDLE;
-        
+        textureDescPool   = VK_NULL_HANDLE;
+        textureDescSet    = VK_NULL_HANDLE;
     }
 
-    const VulkanDescriptorData getDescData(int binding, int set) const{
-        return {textureDescSet, textureDescLayout, textureDescPool, false, 0, binding, set};
+    const VulkanDescriptorData getDescData (int binding, int set) const {
+        return { textureDescSet,
+                 textureDescLayout,
+                 textureDescPool,
+                 false,
+                 0,
+                 binding,
+                 set };
     }
 
     // Add a new texture at runtime into the preallocated descriptor array.
     // Returns the index assigned to the texture, or UINT32_MAX on failure (capacity exhausted).
-    uint32_t addTexture(const std::string& filename) {
-        // find first free slot
-        uint32_t index = UINT32_MAX;
-        for (uint32_t i = 0; i < capacity; ++i) {
-            if (!slotOccupied[i]) { index = i; break; }
+
+
+    VkExtent3D roundMaxDimToPowerOfTwo (VkExtent3D srcTexSize) {
+        VkExtent3D texSize = srcTexSize;
+        if (texSize.width >= texSize.height) {
+            Debug::Log ("Width greater than height");
+            if (texSize.width != 1 << ceiledLog2 (texSize.width)){
+                texSize.height = (int)(texSize.height * 1 << (ceiledLog2 (texSize.width) - 1)) / (float)texSize.width;
+                texSize.width = 1 << (ceiledLog2 (texSize.width) - 1);
+            }
         }
 
-        // if no free slot, attempt to grow capacity (double up to device limits)
-        if (index == UINT32_MAX) {
-            const auto& limits = device.getProperties().limits;
-            uint32_t samplerLimit = static_cast<uint32_t>(std::min(limits.maxPerStageDescriptorSamplers,
-                                                                   limits.maxDescriptorSetSamplers));
-            uint32_t newCapacity = capacity > 0 ? std::min(samplerLimit, capacity * 2u) : 1u;
-            if (newCapacity <= capacity || newCapacity == 0) {
-                return UINT32_MAX; // cannot grow further
+        else if (texSize.height > texSize.width) {
+            if (texSize.height != 1 << ceiledLog2 (texSize.height)) {
+                texSize.width =
+                (int)(texSize.width * 1 << (ceiledLog2 (texSize.height) - 1)) /
+                (float)texSize.height;
+                texSize.height = 1 << (ceiledLog2 (texSize.height) - 1);
             }
-            resizeCapacity(newCapacity);
+        }
+        return texSize;
+    }
+    uint32_t addTexture (const std::string& filename) {
+        int freeIndex = textureImages.size ();
 
-            // find free slot again after resize
-            for (uint32_t i = 0; i < capacity; ++i) {
-                if (!slotOccupied[i]) { index = i; break; }
-            }
-            if (index == UINT32_MAX) return UINT32_MAX; // still no slot
+        textureImages.push_back (VK_NULL_HANDLE);
+        textureImageMemories.push_back (VK_NULL_HANDLE);
+        textureImageViews.push_back (VK_NULL_HANDLE);
+        textureSizes.push_back ({ 0, 0, 0 });
+
+        VkDeviceMemory imageMemory;
+        VkExtent3D srcTexSize;
+        VkImage textureImage =
+        createImageFromFile (device, filename, DEFAULT_TEXTURE_COLOR_FORMAT,
+                             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                             imageMemory, "Texture Image " + std::to_string (freeIndex),
+                             (int&)srcTexSize.width, (int&)srcTexSize.height);
+
+        srcTexSize.depth = 1;
+
+
+        
+        VkExtent3D texSize = roundMaxDimToPowerOfTwo (srcTexSize);
+        Debug::Log ("Original size: (" + std::to_string (srcTexSize.width) + ", " +
+                    std::to_string (srcTexSize.height) + "), downscaled to: (" +
+                    std::to_string (texSize.width) + ", " +
+                    std::to_string (texSize.height) + ")");
+
+        textureImage = blitDownsizedImage (
+        device, textureImage, DEFAULT_TEXTURE_COLOR_FORMAT, srcTexSize.width,
+        srcTexSize.height, texSize.width, texSize.height, imageMemory,
+        ("Blitted Downsize Texture Image " + std::to_string (freeIndex)).c_str ());
+        /* VkImageView textureImageView =
+         createImageView (device, textureImage, DEFAULT_TEXTURE_COLOR_FORMAT,
+                          VK_IMAGE_ASPECT_COLOR_BIT,
+                          "Texture Image View " + std::to_string (freeIndex));
+
+         VkSampler textureSampler =
+         createSampler (device, "Texture Sampler " + std::to_string (freeIndex));*/
+
+        textureImages[freeIndex] = textureImage;
+        // textureImageViews[freeIndex] = textureImageView;
+        textureImageMemories[freeIndex] = imageMemory;
+        textureSizes[freeIndex]         = texSize;
+
+        return static_cast<uint32_t> (freeIndex);
+    }
+
+
+    void pasteTextureOnAtlas (uint32_t textureIndex, VkOffset3D atlasOffset) {
+        if (textureIndex >= textureImages.size ()) {
+            return;
         }
 
-        // create resources
-        VkDeviceMemory mem = VK_NULL_HANDLE;
-        VkImage img = createImageFromFile(device, filename, VK_FORMAT_R8G8B8A8_SRGB,
-                                          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                          mem, "Texture Image " + std::to_string(index));
-        VkImageView view = createImageView(device, img, VK_FORMAT_R8G8B8A8_SRGB,
-                                           VK_IMAGE_ASPECT_COLOR_BIT, "Texture Image View " + std::to_string(index));
-        VkSampler samp = createSampler(device);
+        copyImage (device, textureImages[textureIndex], textureAtlasImage,
+                   textureSizes[textureIndex], atlasOffset);
+        Debug::Log ("Pasted texture " + std::to_string (textureIndex) +
+                    " at atlas offset (" + std::to_string (atlasOffset.x) +
+                    ", " + std::to_string (atlasOffset.y) + ")" + "with size (" +
+                    std::to_string (textureSizes[textureIndex].width) + ", " +
+                    std::to_string (textureSizes[textureIndex].height) + ")");
+        textureAtlasCoords[textureIndex] = atlasOffset;
+    }
 
-        // store into slot
-        textureImages[index] = img;
-        textureImageMemories[index] = mem;
-        textureImageViews[index] = view;
-        textureSamplers[index] = samp;
-        slotOccupied[index] = 1;
+    bool isEndOfTextures (int power, int index, const std::vector<std::vector<int>>& textureIndicesPerPowersOfTwo) {
+        return power <= 0 and index >= textureIndicesPerPowersOfTwo[0].size ();
+    }
+    void fillCell (VkOffset3D topLeftOffset,
+                   int cellPowerSize,
+                   const std::vector<std::vector<int>>& textureIndicesPerPowersOfTwo,
 
-        // update descriptor set for this single array element
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.sampler = samp;
-        imageInfo.imageView = view;
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                   int startPower,
+                   int startIndex,
+                   int& endPower,
+                   int& endIndex) {
 
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = textureDescSet;
-        write.dstBinding = 0;
-        write.dstArrayElement = index;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write.descriptorCount = 1;
-        write.pImageInfo = &imageInfo;
+        while (startPower >= 0 && textureIndicesPerPowersOfTwo[startPower].size () == 0) {
+            startPower--;
+            startIndex = 0;
+        }
+        if (startPower < 0) {
+            endPower = -1;
+            endIndex = -1;
+            return;
+        }
+        if (cellPowerSize > startPower) {
+            // fill 4 subcells
+            int halfCellSize = cellPowerSize - 1;
+            int endP, endI;
+            fillCell ({ topLeftOffset.x, topLeftOffset.y, 0 }, halfCellSize,
+                      textureIndicesPerPowersOfTwo, startPower, startIndex, endP, endI);
+            if (endP == -1) {
+                endPower = endP;
+                endIndex = endI;
+                return;
+            }
+            fillCell ({ topLeftOffset.x + (1 << halfCellSize), topLeftOffset.y, 0 },
+                      halfCellSize, textureIndicesPerPowersOfTwo, endP, endI, endP, endI);
 
-        vkUpdateDescriptorSets(device.getDevice(), 1, &write, 0, nullptr);
+            if (endP == -1) {
+                endPower = endP;
+                endIndex = endI;
+                return;
+            }
+            fillCell ({ topLeftOffset.x, topLeftOffset.y + (1 << halfCellSize), 0 },
+                      halfCellSize, textureIndicesPerPowersOfTwo, endP, endI, endP, endI);
+            if (endP == -1) {
+                endPower = endP;
+                endIndex = endI;
+                return;
+            }
 
-        return index;
+            fillCell ({ topLeftOffset.x + (1 << halfCellSize),
+                        topLeftOffset.y + (1 << halfCellSize), 0 },
+                      halfCellSize, textureIndicesPerPowersOfTwo, endP, endI,
+                      endPower, endIndex);
+
+        } else {
+            Debug::Log (std::to_string (startPower) + ", " + std::to_string (startIndex));
+            pasteTextureOnAtlas (textureIndicesPerPowersOfTwo[startPower][startIndex],
+                                 topLeftOffset);
+            if (startIndex + 1 < textureIndicesPerPowersOfTwo[startPower].size ()) {
+                endPower = startPower;
+                endIndex = startIndex + 1;
+            } else {
+                endPower = startPower - 1;
+                endIndex = 0;
+            }
+            return;
+        }
+    }
+
+    int ceiledLog2 (int value) {
+        return (int)std::ceil (std::log2 ((float)value));
+    }
+    void buildTextureAtlas () {
+
+        textureAtlasCoords.resize (textureImages.size ());
+        std::vector<std::vector<int>> textureIndicesPerPowersOfTwo (
+        ceiledLog2 (atlasSize)); // up to 2^15 = 32768 size textures
+        for (uint32_t i = 0; i < textureImages.size (); i++) {
+            VkExtent3D size = textureSizes[i];
+            int maxDim      = std::max (size.width, size.height);
+            int power       = ceiledLog2 (maxDim);
+            if (power < textureIndicesPerPowersOfTwo.size ()) {
+                textureIndicesPerPowersOfTwo[power].push_back (i);
+            }
+        }
+        int endP, endI;
+        fillCell ({ 0, 0, 0 }, ceiledLog2 (atlasSize) - 1, textureIndicesPerPowersOfTwo,
+                  ceiledLog2 (atlasSize) - 1, 0, endP, endI);
+        writeImageSamplerInDescriptorSet (device, textureAtlasImageView,
+                                          textureAtlasSampler, textureDescSet);
+    }
+
+    glm::vec2 getTextureAtlasOffset (int textureIndex) {
+        if (textureIndex >= textureAtlasCoords.size ()) {
+            return glm::vec2 (0.0f, 0.0f);
+        }
+        VkOffset3D offset = textureAtlasCoords[textureIndex];
+        return glm::vec2 ((float)offset.x / (float)atlasSize,
+                          (float)offset.y / (float)atlasSize);
+    }
+
+    glm::vec2 getTextureSize (int textureIndex) {
+        if (textureIndex >= textureSizes.size ()) {
+            return glm::vec2 (0.0f, 0.0f);
+        }
+        VkExtent3D size = textureSizes[textureIndex];
+        return glm::vec2 ((float)size.width / atlasSize, (float)size.height / atlasSize);
     }
 };
-
-
-

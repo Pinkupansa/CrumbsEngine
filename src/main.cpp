@@ -26,7 +26,7 @@ int main() {
 
     VulkanRenderer renderer(window, width, height);
 
-    Mesh tetrahedron = importMesh("teapot.fbx");
+    Mesh tetrahedron = importMesh("dragon.fbx");
     renderer.initSceneData(view, {0.0f, 3.0f, 10.0f}, {0.5f, 0.5f, 0.5f});
 
     uint32_t teapotIndex = renderer.loadMesh(tetrahedron);
@@ -41,12 +41,20 @@ int main() {
 
     glm::mat4 sphereModel = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0, -3.0f));
 
+
+    Mesh debugTextureQuad = generateQuad();
+    uint32_t debugTextureQuadIndex = renderer.loadMesh(debugTextureQuad);
+    glm::mat4 debugTextureQuadModel = glm::scale(glm::translate(glm::rotate(glm::mat4(1.0f), 1.57f, {1.0f, 0.0f, 0.0f}), {0.0f, -15.0f, -3.0f}), glm::vec3(10.0f));
     float elapsedTime = 0;
     auto lastTime = Clock::now();
 
-    uint16_t poolTexIndex = renderer.loadTexture("textures/pooltex.jpg");
-    Debug::Log("Loaded pool texture at index: " + std::to_string(poolTexIndex));
-    int porcelainTexIndex = renderer.loadTexture("textures/porcelain.jpg");
+    //load all texture in the texture folder
+    // go through all files in the textures/ directory
+    
+    int dragonTexIndex = renderer.loadTexture("textures/Dragon_ground_color.jpg");
+    int rockwallTexIndex = renderer.loadTexture("textures/rockwall.jpg");
+    int brickTexIndex = renderer.loadTexture("textures/tiles.jpg");
+    renderer.buildTextureAtlas();
     while (!glfwWindowShouldClose(window)) {
         auto currentTime = Clock::now();
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count(); // in seconds
@@ -55,9 +63,10 @@ int main() {
 
         
         //Debug::Log(std::to_string(1 / deltaTime));
-        renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::mat4(1.0f), {2*cos(elapsedTime), -1.0f, -4.0f + 2*sin(elapsedTime)}), elapsedTime, {0.0f, 1.0f, 0.0f}), porcelainTexIndex);
-        renderer.addMeshDrawCall(sphereIndex, sphereModel, poolTexIndex);
-        renderer.addMeshDrawCall(quadIndex, quadModel, poolTexIndex);
+        //renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)), {0, -20.0f, -20.0f}), -1.6f, {1.0f, 0.0f, 0.0f}), dragonTexIndex);
+        renderer.addMeshDrawCall(sphereIndex, sphereModel, rockwallTexIndex, glm::vec2(5.0f, 3.0f));
+        renderer.addMeshDrawCall(quadIndex, quadModel, brickTexIndex, glm::vec2(15.0f, 15.0f));
+        //renderer.addMeshDrawCall(debugTextureQuadIndex, debugTextureQuadModel, 0);
         renderer.drawFrame();
         glfwPollEvents();
     }

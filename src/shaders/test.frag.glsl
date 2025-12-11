@@ -19,14 +19,22 @@ layout(set = 0, binding = 0) uniform SceneUBO {
 // Object UBO
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
-    int textureIndex;
+    vec2 atlasOffset;
+    vec2 textureSize;
+    vec2 tilingFactor;
 } object;
 
 layout(set = 2, binding = 0) uniform sampler2D shadowSampler;
 
-layout(set = 3, binding = 0) uniform sampler2D poolTexture[8];
+layout(set = 3, binding = 0) uniform sampler2D textureAtlas;
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
+
+
+vec4 sampleAtlas(vec2 uv) {
+    vec2 atlasUV = object.atlasOffset + vec2(fract(uv.x * object.tilingFactor.x), fract(uv.y * object.tilingFactor.y)) * object.textureSize;
+    return texture(textureAtlas, atlasUV);
+}
 
 vec3 getCameraPos() {
     mat3 rot = mat3(scene.view);
@@ -77,12 +85,12 @@ float computeShadow(vec4 lightSpacePos, vec3 N, vec3 L)
 
     // Slope-scaled bias to reduce acne
     float nDotL = dot(N, L);
-    float bias = max(0.01, 0.02 * (1.0 - nDotL));
+    float bias = max(0.005, 0.01 * (1.0 - nDotL));
 
     // In Vulkan: smaller depth = closer to light
     // If currentDepth > closestDepth (with bias) -> fragment is farther -> in shadow
     if (currentDepth - bias > closestDepth)
-        return 0.0;  // Shadow
+        return 0.2;  // Shadow
     else
         return 1.0;  // Lit
     
@@ -129,9 +137,9 @@ void main() {
     float diffuse = max(dot(N, L), 0.0);
     float specular = computeSpecularLight(N, L);
 
-    vec3 textureColor = texture(poolTexture[object.textureIndex], fragUV).rgb;
+    vec3 textureColor = sampleAtlas(fragUV).rgb;
     // Combine lighting with shadow (add small ambient)
-    vec3 lighting = (diffuse + specular + textureColor) * shadow * scene.lightColor + vec3(0.08);
+    vec3 lighting = (diffuse + specular + textureColor) * shadow * scene.lightColor;
     //vec3 lighting = vec3(shadow, shadow, shadow);
     outColor = vec4(lighting, 1.0);
 }

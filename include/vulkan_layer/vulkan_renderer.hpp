@@ -17,8 +17,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
-#define MAX_VERTEX_NUMBER 100000
-#define MAX_INDEX_NUMBER 100000
+#define MAX_VERTEX_NUMBER 1000000
+#define MAX_INDEX_NUMBER 1000000
 #define MAX_OBJECTS_UB 100000
 #define MAX_SCENE_DATA 1
 
@@ -91,7 +91,7 @@ class VulkanRenderer {
     VulkanRenderer (GLFWwindow* _window, uint32_t _width, uint32_t _height)
     : window (_window), width (_width), height (_height), instance (window),
       device (instance), mainSurface (instance, device, window),
-      swapchain (device, mainSurface), textureBundle (device, {}),
+      swapchain (device, mainSurface), textureBundle (device, ATLAS_SIZE),
       alignment (device.getProperties ().limits.minUniformBufferOffsetAlignment),
       uboAlignedSize ((uboSize + alignment - 1) & ~(alignment - 1)),
 
@@ -195,9 +195,11 @@ class VulkanRenderer {
         return meshPool.size () - 1;
     }
 
-    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform, uint16_t textureIndex) {
+
+
+    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform, uint32_t textureIndex, glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f)) {
         drawCallMeshIndices.push_back (meshIndex);
-        ubos.push_back ({transform, textureIndex});
+        ubos.push_back ({transform, textureBundle.getTextureAtlasOffset(textureIndex), textureBundle.getTextureSize(textureIndex), tilingFactor});
     }
 
     void initSceneData (const glm::mat4 view, const glm::vec3 lightDir, const glm::vec3 lightColor) {
@@ -230,6 +232,9 @@ class VulkanRenderer {
         return textureBundle.addTexture (texturePath);
     }
 
+    void buildTextureAtlas () {
+        textureBundle.buildTextureAtlas();
+    }
     ~VulkanRenderer () {
         destroy ();
     }
