@@ -54,7 +54,7 @@ struct VulkanSceneUBO {
 
         // Projection orthographique Vulkan (z in [0,1])
         // Adjusted bounds to properly frame the scene
-        lightProj = glm::orthoRH_ZO(-8.0f, 8.0f, -8.0f, 8.0f, 0.1f, 30.0f);
+        lightProj = glm::orthoRH_ZO(-8.0f, 8.0f, -8.0f, 8.0f, 0.1f, 50.0f);
 
         lightColor = lightCol;
     }

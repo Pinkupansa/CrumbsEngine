@@ -26,8 +26,8 @@ int main() {
 
     VulkanRenderer renderer(window, width, height);
 
-    Mesh tetrahedron = importMesh("dragon.fbx");
-    renderer.initSceneData(view, {0.0f, 3.0f, 10.0f}, {0.5f, 0.5f, 0.5f});
+    Mesh tetrahedron = importMesh("plant.fbx");
+    renderer.initSceneData(view, {0.0f, 3.0f, 10.0f}, {0.8f, 0.8f, 0.8f});
 
     uint32_t teapotIndex = renderer.loadMesh(tetrahedron);
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.3f, 0, -3.0f));
@@ -51,7 +51,7 @@ int main() {
     //load all texture in the texture folder
     // go through all files in the textures/ directory
     
-    int dragonTexIndex = renderer.loadTexture("textures/Dragon_ground_color.jpg");
+    int dragonTexIndex = renderer.loadTexture("textures/grass.jpg");
     int rockwallTexIndex = renderer.loadTexture("textures/rockwall.jpg");
     int brickTexIndex = renderer.loadTexture("textures/tiles.jpg");
     renderer.buildTextureAtlas();
@@ -63,9 +63,9 @@ int main() {
 
         
         //Debug::Log(std::to_string(1 / deltaTime));
-        //renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)), {0, -20.0f, -20.0f}), -1.6f, {1.0f, 0.0f, 0.0f}), dragonTexIndex);
+        renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)), {0, -20.0f, -20.0f}), -1.6f, {1.0f, 0.0f, 0.0f}), dragonTexIndex);
         renderer.addMeshDrawCall(sphereIndex, sphereModel, rockwallTexIndex, glm::vec2(5.0f, 3.0f));
-        renderer.addMeshDrawCall(quadIndex, quadModel, brickTexIndex, glm::vec2(15.0f, 15.0f));
+        renderer.addMeshDrawCall(quadIndex, quadModel, brickTexIndex, glm::vec2(30.0f, 30.0f));
         //renderer.addMeshDrawCall(debugTextureQuadIndex, debugTextureQuadModel, 0);
         renderer.drawFrame();
         glfwPollEvents();

@@ -93,11 +93,25 @@ class VulkanTextureBundle {
         textureImages.clear ();
         textureImageMemories.clear ();
         textureImageViews.clear ();
+        textureSizes.clear ();
+        textureAtlasCoords.clear ();
 
+        if (textureAtlasSampler != VK_NULL_HANDLE)
+            vkDestroySampler (device.getDevice (), textureAtlasSampler, nullptr);
+        if (textureAtlasImageView != VK_NULL_HANDLE)
+            vkDestroyImageView (device.getDevice (), textureAtlasImageView, nullptr);
+        if (textureAtlasImage != VK_NULL_HANDLE)
+            vkDestroyImage (device.getDevice (), textureAtlasImage, nullptr);
+        if (textureAtlasImageMemory != VK_NULL_HANDLE)
+            vkFreeMemory (device.getDevice (), textureAtlasImageMemory, nullptr);
         // set to null handles
         textureDescLayout = VK_NULL_HANDLE;
         textureDescPool   = VK_NULL_HANDLE;
         textureDescSet    = VK_NULL_HANDLE;
+        textureAtlasSampler       = VK_NULL_HANDLE;
+        textureAtlasImageView     = VK_NULL_HANDLE;
+        textureAtlasImage         = VK_NULL_HANDLE;
+        textureAtlasImageMemory   = VK_NULL_HANDLE;
     }
 
     const VulkanDescriptorData getDescData (int binding, int set) const {
@@ -142,13 +156,13 @@ class VulkanTextureBundle {
         textureImageViews.push_back (VK_NULL_HANDLE);
         textureSizes.push_back ({ 0, 0, 0 });
 
-        VkDeviceMemory imageMemory;
+        VkDeviceMemory imageMemoryPrevious;
         VkExtent3D srcTexSize;
-        VkImage textureImage =
+        VkImage textureImagePrevious=
         createImageFromFile (device, filename, DEFAULT_TEXTURE_COLOR_FORMAT,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                             imageMemory, "Texture Image " + std::to_string (freeIndex),
-                             (int&)srcTexSize.width, (int&)srcTexSize.height);
+                             imageMemoryPrevious, "Texture Image " + std::to_string (freeIndex),
+                             (int&)srcTexSize.width, (int&)srcTexSize.height, ATLAS_PADDING);
 
         srcTexSize.depth = 1;
 
@@ -159,9 +173,10 @@ class VulkanTextureBundle {
                     std::to_string (srcTexSize.height) + "), downscaled to: (" +
                     std::to_string (texSize.width) + ", " +
                     std::to_string (texSize.height) + ")");
-
-        textureImage = blitDownsizedImage (
-        device, textureImage, DEFAULT_TEXTURE_COLOR_FORMAT, srcTexSize.width,
+        
+        VkDeviceMemory imageMemory;
+        VkImage textureImage = blitDownsizedImage (
+        device, textureImagePrevious, DEFAULT_TEXTURE_COLOR_FORMAT, srcTexSize.width,
         srcTexSize.height, texSize.width, texSize.height, imageMemory,
         ("Blitted Downsize Texture Image " + std::to_string (freeIndex)).c_str ());
         /* VkImageView textureImageView =
@@ -177,6 +192,10 @@ class VulkanTextureBundle {
         textureImageMemories[freeIndex] = imageMemory;
         textureSizes[freeIndex]         = texSize;
 
+        vkFreeMemory (device.getDevice (), imageMemoryPrevious, nullptr);
+        vkDestroyImage (device.getDevice (), textureImagePrevious, nullptr);
+        
+        
         return static_cast<uint32_t> (freeIndex);
     }
 
@@ -292,8 +311,8 @@ class VulkanTextureBundle {
             return glm::vec2 (0.0f, 0.0f);
         }
         VkOffset3D offset = textureAtlasCoords[textureIndex];
-        return glm::vec2 ((float)offset.x / (float)atlasSize,
-                          (float)offset.y / (float)atlasSize);
+        return glm::vec2 ((float)(offset.x + ATLAS_PADDING) / (float)atlasSize,
+                          (float)(offset.y + ATLAS_PADDING)/ (float)atlasSize);
     }
 
     glm::vec2 getTextureSize (int textureIndex) {
@@ -301,6 +320,6 @@ class VulkanTextureBundle {
             return glm::vec2 (0.0f, 0.0f);
         }
         VkExtent3D size = textureSizes[textureIndex];
-        return glm::vec2 ((float)size.width / atlasSize, (float)size.height / atlasSize);
+        return glm::vec2 ((float)(size.width - 2*ATLAS_PADDING)/ atlasSize, (float)(size.height - 2*ATLAS_PADDING)/ atlasSize);
     }
 };

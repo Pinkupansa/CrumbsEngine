@@ -31,8 +31,14 @@ layout(set = 3, binding = 0) uniform sampler2D textureAtlas;
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
 
+vec2 clampVec(vec2 a, vec2 minVal, vec2 maxVal) {
+    return vec2(clamp(a.x, minVal.x, maxVal.x), clamp(a.y, minVal.y, maxVal.y));
+}
+vec2 fractVec(vec2 v) {
+    return v - floor(v);
+}
 vec4 sampleAtlas(vec2 uv) {
-    vec2 atlasUV = object.atlasOffset + vec2(fract(uv.x * object.tilingFactor.x), fract(uv.y * object.tilingFactor.y)) * object.textureSize;
+    vec2 atlasUV =  clampVec(object.atlasOffset + fractVec(uv * object.tilingFactor) * object.textureSize, object.atlasOffset + 0.0002, object.atlasOffset + object.textureSize - 0.0002);
     return texture(textureAtlas, atlasUV);
 }
 
@@ -139,7 +145,8 @@ void main() {
 
     vec3 textureColor = sampleAtlas(fragUV).rgb;
     // Combine lighting with shadow (add small ambient)
-    vec3 lighting = (diffuse + specular + textureColor) * shadow * scene.lightColor;
+    vec3 lighting = (diffuse*textureColor + specular) * shadow * scene.lightColor;
+    //vec3 lighting = textureColor;
     //vec3 lighting = vec3(shadow, shadow, shadow);
     outColor = vec4(lighting, 1.0);
 }

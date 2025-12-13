@@ -646,6 +646,16 @@ VkSampler createSampler (const VulkanDevice& device, std::string name) {
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable           = VK_FALSE;
     samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias              = 0.0f;
+    samplerInfo.minLod                  = 0.0f;
+    samplerInfo.maxLod                  = VK_LOD_CLAMP_NONE;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    //obtain physical device properties to set maxAnisotropy
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties (device.getPhysicalDevice (), &properties);
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    
 
     VkSampler sampler;
     vkCreateSampler (device.getDevice (), &samplerInfo, nullptr, &sampler);
@@ -803,27 +813,91 @@ void copyBufferToImage (const VulkanDevice& device,
 
     endSingleTimeCommands (device, commandBuffer);
 }
+// Pads an RGBA8 image by extruding edge pixels.
+// - srcPixels: output of stbi_load (RGBA8)
+// - width, height: original image size
+// - paddingPx: padding size in pixels
+// - outWidth, outHeight: padded image size
+// Returns: newly allocated RGBA8 buffer (caller owns it)
+std::vector<uint8_t> padImageRGBA(
+    const uint8_t* srcPixels,
+    int width,
+    int height,
+    int paddingPx,
+    int& outWidth,
+    int& outHeight
+) {
+    outWidth  = width  + paddingPx * 2;
+    outHeight = height + paddingPx * 2;
+
+    std::vector<uint8_t> out(outWidth * outHeight * 4);
+
+    auto src = [&](int x, int y) {
+        return srcPixels + (y * width + x) * 4;
+    };
+
+    auto dst = [&](int x, int y) {
+        return out.data() + (y * outWidth + x) * 4;
+    };
+
+    // 1️⃣ Copy original image into center
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            std::memcpy(dst(x + paddingPx, y + paddingPx), src(x, y), 4);
+        }
+    }
+
+    // 2️⃣ Extrude left & right edges
+    for (int y = 0; y < height; ++y) {
+        for (int p = 0; p < paddingPx; ++p) {
+            std::memcpy(dst(p, y + paddingPx), src(0, y), 4);                    // left
+            std::memcpy(dst(outWidth - 1 - p, y + paddingPx),
+                        src(width - 1, y), 4);                                  // right
+        }
+    }
+
+    // 3️⃣ Extrude top & bottom edges (including corners)
+    for (int x = 0; x < outWidth; ++x) {
+        for (int p = 0; p < paddingPx; ++p) {
+            std::memcpy(dst(x, p),
+                        dst(x, paddingPx), 4);                                  // top
+            std::memcpy(dst(x, outHeight - 1 - p),
+                        dst(x, outHeight - 1 - paddingPx), 4);                  // bottom
+        }
+    }
+
+    return out;
+}
 
 VkImage createImageFromFile (const VulkanDevice& device,
                              const std::string& filename,
                              VkFormat format,
                              VkImageUsageFlags usage,
                              VkDeviceMemory& imageMemory,
-                             std::string name, int& texWidth, int& texHeight) {
+                             std::string name, int& texWidth, int& texHeight, int padding) {
     int texChannels;
-    stbi_uc* pixels =
+    stbi_uc* rawPixels =
     stbi_load (filename.c_str (), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+    std::vector<uint8_t> pixels = padImageRGBA(
+        rawPixels,
+        texWidth,
+        texHeight,
+        padding,
+        texWidth,
+        texHeight
+    );
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-    if (!pixels) {
+    if (!pixels.data ()) {
         throw std::runtime_error ("Failed to load texture image!");
     }
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    createBufferWithData (device, VulkanBufferType::Staging, imageSize, pixels,
+    createBufferWithData (device, VulkanBufferType::Staging, imageSize, pixels.data(),
                           stagingBuffer, stagingBufferMemory, "Texture Staging Buffer");
 
-    stbi_image_free (pixels);
+    stbi_image_free (rawPixels);
 
     // Ensure the image is created with TRANSFER_DST and TRANSFER_SRC usage so
     // we can transition it to TRANSFER_SRC_OPTIMAL later when copying from it
@@ -922,7 +996,7 @@ VkImage blitDownsizedImage(
 
     // --- 2. Transition ONLY the destination image ---
     transitionImageLayout(device, dst, format,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, // assumed initial
+                          VK_IMAGE_LAYOUT_UNDEFINED, // assumed initial
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Source stays in TRANSFER_SRC_OPTIMAL the entire time.
@@ -950,7 +1024,7 @@ VkImage blitDownsizedImage(
     // --- 4. Transition destination to shader-read layout ---
     transitionImageLayout(device, dst, format,
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     // Source stays unchanged: still TRANSFER_SRC_OPTIMAL
 
