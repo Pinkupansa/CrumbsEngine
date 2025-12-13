@@ -54,6 +54,7 @@ int main() {
     int dragonTexIndex = renderer.loadTexture("textures/grass.jpg");
     int rockwallTexIndex = renderer.loadTexture("textures/rockwall.jpg");
     int brickTexIndex = renderer.loadTexture("textures/tiles.jpg");
+    int stonewallNormalMapIndex = renderer.loadTexture("textures/tiles_normal.png");
     renderer.buildTextureAtlas();
     while (!glfwWindowShouldClose(window)) {
         auto currentTime = Clock::now();
@@ -63,9 +64,9 @@ int main() {
 
         
         //Debug::Log(std::to_string(1 / deltaTime));
-        renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)), {0, -20.0f, -20.0f}), -1.6f, {1.0f, 0.0f, 0.0f}), dragonTexIndex);
-        renderer.addMeshDrawCall(sphereIndex, sphereModel, rockwallTexIndex, glm::vec2(5.0f, 3.0f));
-        renderer.addMeshDrawCall(quadIndex, quadModel, brickTexIndex, glm::vec2(30.0f, 30.0f));
+        renderer.addMeshDrawCall(teapotIndex, glm::rotate(glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)), {0, -20.0f, -20.0f}), -1.6f, {1.0f, 0.0f, 0.0f}), dragonTexIndex, stonewallNormalMapIndex);
+        renderer.addMeshDrawCall(sphereIndex, sphereModel, rockwallTexIndex, stonewallNormalMapIndex, glm::vec2(5.0f, 3.0f));
+        renderer.addMeshDrawCall(quadIndex, quadModel, brickTexIndex, stonewallNormalMapIndex, glm::vec2(30.0f, 30.0f));
         //renderer.addMeshDrawCall(debugTextureQuadIndex, debugTextureQuadModel, 0);
         renderer.drawFrame();
         glfwPollEvents();

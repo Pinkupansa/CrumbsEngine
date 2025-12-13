@@ -177,9 +177,12 @@ class VulkanRenderer {
         const auto& meshNormals  = mesh.getNormals ();
         const auto& meshIndices  = mesh.getTriangles ();
         const auto& meshUVs      = mesh.getUVs ();
+        const auto& meshTangents = mesh.getTangents();
+        const auto& meshBitangents = mesh.getBitangents();
+
 
         for (size_t i = 0; i < meshVertices.size (); ++i) {
-            vertices.push_back ({ meshVertices[i], { 1.0f, 1.0f, 1.0f }, meshNormals[i], meshUVs[i] });
+            vertices.push_back ({ meshVertices[i], { 1.0f, 1.0f, 1.0f }, meshNormals[i], meshTangents[i], meshBitangents[i], meshUVs[i] });
         }
         indices.insert (indices.end (), meshIndices.begin (), meshIndices.end ());
 
@@ -197,9 +200,9 @@ class VulkanRenderer {
 
 
 
-    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform, uint32_t textureIndex, glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f)) {
+    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform, uint32_t textureIndex, uint32_t normalMapIndex, glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f)) {
         drawCallMeshIndices.push_back (meshIndex);
-        ubos.push_back ({transform, textureBundle.getTextureAtlasOffset(textureIndex), textureBundle.getTextureSize(textureIndex), tilingFactor});
+        ubos.push_back ({transform, textureBundle.getTextureAtlasOffset(textureIndex), textureBundle.getTextureSize(textureIndex), textureBundle.getTextureAtlasOffset(normalMapIndex), textureBundle.getTextureSize(normalMapIndex), tilingFactor});
     }
 
     void initSceneData (const glm::mat4 view, const glm::vec3 lightDir, const glm::vec3 lightColor) {

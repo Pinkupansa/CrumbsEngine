@@ -111,6 +111,8 @@ public:
         indexing.runtimeDescriptorArray = VK_TRUE;                // usually needed
         indexing.descriptorBindingVariableDescriptorCount = VK_TRUE;
 
+        VkPhysicalDeviceFeatures features = {};
+        features.samplerAnisotropy = VK_TRUE; 
 
         VkDeviceCreateInfo deviceCreateInfo{};
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -119,6 +121,7 @@ public:
         deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
         deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
         deviceCreateInfo.pNext = &indexing;
+        deviceCreateInfo.pEnabledFeatures = &features;
 
         if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create logical device!");
