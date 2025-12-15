@@ -655,6 +655,7 @@ VkSampler createSampler (const VulkanDevice& device, std::string name) {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties (device.getPhysicalDevice (), &properties);
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
     
 
     VkSampler sampler;

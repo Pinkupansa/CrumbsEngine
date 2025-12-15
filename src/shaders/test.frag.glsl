@@ -42,10 +42,16 @@ vec2 fractVec(vec2 v) {
     return v - floor(v);
 }
 vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 textureSize, vec2 tilingFactor) {
+    if(atlasOffset.r < 0){ 
+        return vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    }
     vec2 atlasUV =  clampVec(atlasOffset + fractVec(uv * tilingFactor) * textureSize, atlasOffset + 0.0002, atlasOffset + textureSize - 0.0002);
     return texture(textureAtlas, atlasUV);
 }
 vec3 computeNormal(){
+    if(object.normalmapAtlasOffset.r < 0){
+        return vertNormal;
+    }
     vec3 normalMapSample = sampleAtlas(fragUV, object.normalmapAtlasOffset, object.normalmapTextureSize, object.tilingFactor).rgb;
     vec3 normalMap = normalize(normalMapSample);
 
