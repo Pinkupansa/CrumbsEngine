@@ -307,8 +307,8 @@ class VulkanTextureBundle {
     }
 
     glm::vec2 getTextureAtlasOffset (int textureIndex) {
-        if (textureIndex >= textureAtlasCoords.size ()) {
-            return glm::vec2 (0.0f, 0.0f);
+        if (textureIndex >= textureAtlasCoords.size () or textureIndex < 0) {
+            return glm::vec2 (-1.0f, -1.0f);
         }
         VkOffset3D offset = textureAtlasCoords[textureIndex];
         return glm::vec2 ((float)(offset.x + ATLAS_PADDING) / (float)atlasSize,
@@ -316,7 +316,7 @@ class VulkanTextureBundle {
     }
 
     glm::vec2 getTextureSize (int textureIndex) {
-        if (textureIndex >= textureSizes.size ()) {
+        if (textureIndex >= textureSizes.size () or textureIndex < 0) {
             return glm::vec2 (0.0f, 0.0f);
         }
         VkExtent3D size = textureSizes[textureIndex];
