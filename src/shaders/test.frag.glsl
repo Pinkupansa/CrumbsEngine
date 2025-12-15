@@ -5,7 +5,7 @@ layout(location = 1) in vec3 vertTangent;
 layout(location = 2) in vec3 vertBitangent;
 layout(location = 3) in vec3 fragWorldPos;
 layout(location = 4) in vec2 fragUV;
-
+layout(location = 5) in vec4 fragCamPos;
 layout(location = 0) out vec4 outColor;
 
 // Scene UBO
@@ -41,21 +41,25 @@ vec2 clampVec(vec2 a, vec2 minVal, vec2 maxVal) {
 vec2 fractVec(vec2 v) {
     return v - floor(v);
 }
-vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 textureSize, vec2 tilingFactor) {
+vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
     if(atlasOffset.r < 0){ 
         return vec4(1.0f, 1.0f, 1.0f, 1.0f);
     }
-    vec2 atlasUV =  clampVec(atlasOffset + fractVec(uv * tilingFactor) * textureSize, atlasOffset + 0.0002, atlasOffset + textureSize - 0.0002);
+    vec2 atlasUV =  clampVec(atlasOffset + fractVec(uv * tilingFactor) * texSize, atlasOffset + 0.0002, atlasOffset + texSize - 0.0002);
     return texture(textureAtlas, atlasUV);
+}
+
+vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor, float depth){
+    return sampleAtlas(uv, atlasOffset, texSize, tilingFactor);
 }
 vec3 computeNormal(){
     if(object.normalmapAtlasOffset.r < 0){
         return vertNormal;
     }
-    vec3 normalMapSample = sampleAtlas(fragUV, object.normalmapAtlasOffset, object.normalmapTextureSize, object.tilingFactor).rgb;
-    vec3 normalMap = normalize(normalMapSample);
+    vec3 normalMapSample = computeTexColor(fragUV, object.normalmapAtlasOffset, object.normalmapTextureSize, object.tilingFactor, fragCamPos.z).rgb;
 
-    return normalize(normalMap.r*vertTangent + normalMap.g * vertBitangent + normalMap.b * vertNormal);
+
+    return normalize(normalMapSample.r*vertTangent + normalMapSample.g * vertBitangent + normalMapSample.b * vertNormal);
 }
 vec3 getCameraPos() {
     mat3 rot = mat3(scene.view);
@@ -158,7 +162,7 @@ void main() {
     float diffuse = max(dot(N, L), 0.0);
     float specular = computeSpecularLight(N, L);
 
-    vec3 textureColor = sampleAtlas(fragUV, object.atlasOffset, object.textureSize, object.tilingFactor).rgb;
+    vec3 textureColor = computeTexColor(fragUV, object.atlasOffset, object.textureSize, object.tilingFactor, fragCamPos.z).rgb;
     // Combine lighting with shadow (add small ambient)
     vec3 lighting = (diffuse*textureColor + specular) * shadow * scene.lightColor;
     //vec3 lighting = textureColor;

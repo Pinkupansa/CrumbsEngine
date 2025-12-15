@@ -5,6 +5,7 @@
 #include "scene.hpp"
 #include "vulkan_renderer.hpp"
 #include <GLFW/glfw3.h>
+#include "input_manager.hpp"
 using Clock = std::chrono::high_resolution_clock;
 
 
@@ -12,6 +13,8 @@ void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
     if (!crumb.renderData.has_value ()) {
         return;
     }
+
+
     renderer.addMeshDrawCall (crumb.renderData.value ().meshIndex,
                               crumb.transform.getModelMatrix (),
                               crumb.renderData.value ().material.textureImageIndex,
@@ -19,8 +22,14 @@ void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
                               crumb.renderData.value ().material.tilingFactor);
 }
 void renderScene (VulkanRenderer& renderer, Scene& scene) {
+    if (!scene.hasCamera ()) {
+        Debug::LogWarning ("Scene has no camera !");
+    }
+    renderer.initSceneData (scene.getMainCamera ()->getView (),
+                            { 0.0f, 3.0f, 10.0f }, { 1, 1, 1 });
+
     for (Crumb* crumb : scene.getAllCrumbs ()) {
-        renderCrumb(renderer, *crumb);
+        renderCrumb (renderer, *crumb);
     }
 }
 int main () {
@@ -37,30 +46,14 @@ int main () {
     GLFWwindow* window =
     glfwCreateWindow (width, height, "Vulkan Window", nullptr, nullptr);
 
-    glm::mat4 view = glm::lookAt (glm::vec3 (0.0f, 0.0f, 2.0f), // camera position
-                                  glm::vec3 (0.0f, 0.0f, 0.0f), // look at origin
-                                  glm::vec3 (0.0f, 1.0f, 0.0f)  // up vector
-    );
-
     VulkanRenderer renderer (window, width, height);
 
-    Mesh tetrahedron = importMesh ("plant.fbx");
-    renderer.initSceneData (view, { 0.0f, 3.0f, 10.0f }, { 1, 1, 1 });
-
-    uint32_t teapotIndex = renderer.loadMesh (tetrahedron);
-    glm::mat4 model = glm::translate (glm::mat4 (1.0f), glm::vec3 (0.3f, 0, -3.0f));
 
     Mesh quadMesh      = generateQuad ();
     uint32_t quadIndex = renderer.loadMesh (quadMesh);
-    glm::mat4 quadModel =
-    glm::scale (glm::translate (glm::mat4 (1.0f), { 0.0f, -1.0f, 0.0f }), glm::vec3 (30.0f));
 
     Mesh sphere          = generateSphere ();
     uint32_t sphereIndex = renderer.loadMesh (sphere);
-
-    glm::mat4 sphereModel =
-    glm::translate (glm::mat4 (1.0f), glm::vec3 (2.0f, 0, -3.0f));
-
 
     Mesh debugTextureQuad          = generateQuad ();
     uint32_t debugTextureQuadIndex = renderer.loadMesh (debugTextureQuad);
@@ -84,20 +77,29 @@ int main () {
     renderer.buildTextureAtlas ();
 
 
-    Material m({1, 1, 1, 1}, 1, rockwallTexIndex, stonewallNormalMapIndex, {5, 3});
+    Material m ({ 1, 1, 1, 1 }, 1, rockwallTexIndex, stonewallNormalMapIndex, { 5, 3 });
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
     sphereObject.transform.position = { 2, 0, -3 };
-
-    RenderData floorRenderData (quadIndex);
+    
+    Material m2 ({ 1, 1, 1, 1 }, 1, brickTexIndex, -1, { 50, 50 });
+    RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
-    floorObject.transform.rotate ({ 1, 0, 0}, 0.2);
-    floorObject.transform.translate({0, -1, 0});
-    floorObject.transform.scaleByFactor(glm::vec3(10));
-    Scene scene;
-    scene.addCrumb(sphereObject);
-    scene.addCrumb(floorObject);
+    floorObject.transform.rotate ({ 1, 0, 0 }, 0.2);
+    floorObject.transform.translate ({ 0, -1, 0 });
+    floorObject.transform.scaleByFactor (glm::vec3 (10));
 
+
+    Scene scene;
+    scene.addCrumb (sphereObject);
+    scene.addCrumb (floorObject);
+
+    Camera cam (glm::vec3 (0.0f, 10.0f, -2.0f), // camera position
+                glm::vec3 (0.0f, 0.0f, 0.0f));
+    scene.setCamera (cam);
+
+
+    InputManager inputs(window);
     while (!glfwWindowShouldClose (window)) {
         auto currentTime = Clock::now ();
         float deltaTime =
@@ -105,9 +107,30 @@ int main () {
         lastTime = currentTime;
         elapsedTime += deltaTime;
 
+        float speed = 3;
 
-        renderScene(renderer, scene);
+        if(inputs.isPressed(GLFW_KEY_W)){
+            cam.transform.translate(speed*deltaTime*cam.transform.forward());
+        }
+
+        if(inputs.isPressed(GLFW_KEY_S)){
+            cam.transform.translate(-speed*deltaTime*cam.transform.forward());
+        }
+
+        if(inputs.isPressed(GLFW_KEY_A)){
+            cam.transform.translate(-speed*deltaTime*cam.transform.right());
+        }
+
+        if(inputs.isPressed(GLFW_KEY_D)){
+            cam.transform.translate(speed*deltaTime*cam.transform.right());
+        }
+
+        cam.transform.rotate({0, 1, 0}, -inputs.getMouseDisplacement().x * deltaTime);
+        cam.transform.rotate(cam.transform.right(), -inputs.getMouseDisplacement().y * deltaTime);
+        renderScene (renderer, scene);
         renderer.drawFrame ();
+
+        inputs.newFrame();
         glfwPollEvents ();
     }
 

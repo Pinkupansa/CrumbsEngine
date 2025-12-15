@@ -14,6 +14,15 @@ class Transform {
         glm::mat4_cast (rotation) * glm::scale (glm::mat4 (1.0f), scale);
     }
 
+    const glm::vec3 forward() const{
+        return rotation * glm::vec3(0,0,1);
+    }
+    const glm::vec3 right() const{
+        return rotation * glm::vec3(-1,0,0);
+    }
+    const glm::vec3 up() const{
+        return rotation * glm::vec3(0,1,0);
+    }
     void rotate(glm::vec3 axis, float angle){
         rotation = axisAngleToQuaternion(axis, angle) * rotation;
         rotation = glm::normalize(rotation);

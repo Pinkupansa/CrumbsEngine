@@ -13,7 +13,7 @@ layout(location = 2) out vec3 outBitangent;
 
 layout(location = 3) out vec3 fragWorldPos;
 layout(location = 4) out vec2 fragUV;
-
+layout(location = 5) out vec4 fragCamPos;
 
 // Scene UBO (set = 0)
 layout(set = 0, binding = 0) uniform SceneUBO {
@@ -41,7 +41,9 @@ void main() {
     outTangent = normalize(normalMatrix * inTangent);
     outBitangent = normalize(normalMatrix * inBitangent);
     fragWorldPos = worldPos.xyz;
-    gl_Position = scene.proj * scene.view * worldPos;
+    fragCamPos = scene.proj * scene.view * worldPos ;
+    gl_Position = fragCamPos;
     //gl_Position = scene.lightProj * scene.lightView * worldPos;
     fragUV = inUV;
+
 }
