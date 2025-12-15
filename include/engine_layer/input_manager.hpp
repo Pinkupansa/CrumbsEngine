@@ -29,6 +29,7 @@ class InputManager {
     InputManager (GLFWwindow* window) : m_window (window) {
         // 1️⃣ Set the user pointer to this instance
         glfwSetWindowUserPointer(window, this);
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         glfwSetKeyCallback (window, [] (GLFWwindow* w, int k, int sc, int a, int m) {
             // Recover your InputManager instance from the window user pointer
             InputManager* mgr =

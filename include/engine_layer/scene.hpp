@@ -10,6 +10,10 @@ class Scene{
         Camera* m_mainCamera;
 
     public: 
+        glm::vec3 groundColor; 
+        glm::vec3 skyColor; 
+        glm::vec3 lightDir; 
+        glm::vec3 lightColor;
 
         const bool hasCamera() const{
             return m_mainCamera != nullptr;

@@ -6,6 +6,12 @@ layout(location = 2) in vec3 inNormal;
 
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
+    vec2 atlasOffset;
+    vec2 texSize;
+    vec2 normalmapAtlasOffset;
+    vec2 normalmapTextureSize;
+    vec2 tilingFactor; 
+    bool castsShadows; //to be optimized
 } object;
 
 layout(set = 0, binding = 0) uniform SceneUBO {
@@ -15,10 +21,14 @@ layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 lightProj;
     vec3 lightColor;
     vec3 lightDir;
+    vec3 ambientLightColor;
+    
 } scene;
 
 void main() {
-    vec4 worldPos = object.model * vec4(inPos, 1.0);
-    gl_Position = scene.lightProj * scene.lightView * worldPos;
+    if(object.castsShadows){
+        vec4 worldPos = object.model * vec4(inPos, 1.0);
+        gl_Position = scene.lightProj * scene.lightView * worldPos;
+    }
 }
 

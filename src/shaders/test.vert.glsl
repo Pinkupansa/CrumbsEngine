@@ -23,6 +23,7 @@ layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 lightProj;
     vec3 lightColor;
     vec3 lightDir;
+    vec3 ambientLightColor;
 } scene;
 
 // Per-object UBO (set = 1, dynamic)

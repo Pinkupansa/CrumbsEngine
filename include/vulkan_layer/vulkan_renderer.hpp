@@ -1,17 +1,17 @@
 #pragma once
 #define GLFW_INCLUDE_VULKAN
 #include "mesh.hpp"
-#include "vulkan_mesh_draw_info.hpp"
-#include "vulkan_scene_ubo.hpp"
-#include "vulkan_ubo.hpp"
-#include "vulkan_vertex.hpp"
 #include "vulkan_buffer.hpp"
 #include "vulkan_descriptor.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_image_drawer.hpp"
+#include "vulkan_mesh_draw_info.hpp"
+#include "vulkan_scene_ubo.hpp"
 #include "vulkan_shadow_view.hpp"
 #include "vulkan_swapchain.hpp"
 #include "vulkan_texture_bundle.hpp"
+#include "vulkan_ubo.hpp"
+#include "vulkan_vertex.hpp"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -76,8 +76,8 @@ class VulkanRenderer {
     // todo : Create shadow render pass, shadow pipeline, shadowframebuffers and shadow syncobjects
     int currentFrame = 0;
 
-    std::vector<uint8_t>
-    padData (std::vector<VulkanUniformBufferObject> ubos, VkDeviceSize alignedSize) {
+    std::vector<uint8_t> padData (std::vector<VulkanUniformBufferObject> ubos,
+                                  VkDeviceSize alignedSize) {
         std::vector<uint8_t> paddedData (alignedSize * ubos.size (), 0); // zero-initialized
 
         for (size_t i = 0; i < ubos.size (); ++i) {
@@ -135,15 +135,16 @@ class VulkanRenderer {
                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                              sizeof (VulkanSceneUBO),
                              "Scene UB Descriptor Set"),
-      shadowView (device, 1600, 1600, DEFAULT_SHADOW_FORMAT),
+      shadowView (device, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEFAULT_SHADOW_FORMAT),
       shadowImageDrawer (device,
                          shadowView.getExtent (),
                          shadowView.getAttachmentsPerImage (),
-                         { sceneDataUBDescriptor.getDescData(0, 0), objectsUBDescriptor.getDescData(0, 1) },
+                         { sceneDataUBDescriptor.getDescData (0, 0),
+                           objectsUBDescriptor.getDescData (0, 1) },
                          {},
                          {},
                          { createShadowDepthAttachment () },
-                         { createDepthClearValue({1.0f, 0})},
+                         { createDepthClearValue ({ 1.0f, 0 }) },
                          { shadowShaderPath },
                          {},
                          VK_CULL_MODE_NONE,
@@ -152,15 +153,17 @@ class VulkanRenderer {
       mainImageDrawer (device,
                        mainSurface.getCapabilities ().currentExtent,
                        swapchain.getAttachmentsPerFramebuffer (),
-                       { sceneDataUBDescriptor.getDescData(0, 0), objectsUBDescriptor.getDescData(0, 1), shadowView.getDescData(0, 2), textureBundle.getDescData(0, 3) },
+                       { sceneDataUBDescriptor.getDescData (0, 0),
+                         objectsUBDescriptor.getDescData (0, 1),
+                         shadowView.getDescData (0, 2), textureBundle.getDescData (0, 3) },
                        { createColorAttachment () },
-                       { createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f})},
+                       { createColorClearValue ({ 0.1f, 0.1f, 0.1f, 0.1f }) },
                        { createDepthAttachment () },
-                       {createDepthClearValue({1.0f, 0})},
+                       { createDepthClearValue ({ 1.0f, 0 }) },
                        { vertShaderPath },
                        { fragShaderPath },
                        VK_CULL_MODE_BACK_BIT,
-                        VK_COMPARE_OP_LESS,
+                       VK_COMPARE_OP_LESS,
                        "Main Image Drawer") {
         std::cout << "Vertex buffer size: " << MAX_VERTEX_NUMBER * vertexSize << std::endl;
         std::cout << "Index buffer size: " << MAX_INDEX_NUMBER * indexSize << std::endl;
@@ -173,16 +176,21 @@ class VulkanRenderer {
         VkDeviceSize vertexOffset = vertices.size ();
         VkDeviceSize indexOffset  = indices.size ();
 
-        const auto& meshVertices = mesh.getVertices ();
-        const auto& meshNormals  = mesh.getNormals ();
-        const auto& meshIndices  = mesh.getTriangles ();
-        const auto& meshUVs      = mesh.getUVs ();
-        const auto& meshTangents = mesh.getTangents();
-        const auto& meshBitangents = mesh.getBitangents();
+        const auto& meshVertices   = mesh.getVertices ();
+        const auto& meshNormals    = mesh.getNormals ();
+        const auto& meshIndices    = mesh.getTriangles ();
+        const auto& meshUVs        = mesh.getUVs ();
+        const auto& meshTangents   = mesh.getTangents ();
+        const auto& meshBitangents = mesh.getBitangents ();
 
 
         for (size_t i = 0; i < meshVertices.size (); ++i) {
-            vertices.push_back ({ meshVertices[i], { 1.0f, 1.0f, 1.0f }, meshNormals[i], meshTangents[i], meshBitangents[i], meshUVs[i] });
+            vertices.push_back ({ meshVertices[i],
+                                  { 1.0f, 1.0f, 1.0f },
+                                  meshNormals[i],
+                                  meshTangents[i],
+                                  meshBitangents[i],
+                                  meshUVs[i] });
         }
         indices.insert (indices.end (), meshIndices.begin (), meshIndices.end ());
 
@@ -199,20 +207,28 @@ class VulkanRenderer {
     }
 
 
-
-    void addMeshDrawCall (uint32_t meshIndex, glm::mat4 transform, uint32_t textureIndex, uint32_t normalMapIndex, glm::vec2 tilingFactor = glm::vec2(1.0f, 1.0f)) {
+    void addMeshDrawCall (uint32_t meshIndex,
+                          glm::mat4 transform,
+                          uint32_t textureIndex,
+                          uint32_t normalMapIndex,
+                          glm::vec2 tilingFactor = glm::vec2 (1.0f, 1.0f),
+                          bool castsShadows = true,
+                          bool isLit = true) {
         drawCallMeshIndices.push_back (meshIndex);
-        ubos.push_back ({transform, textureBundle.getTextureAtlasOffset(textureIndex), textureBundle.getTextureSize(textureIndex), textureBundle.getTextureAtlasOffset(normalMapIndex), textureBundle.getTextureSize(normalMapIndex), tilingFactor});
+        ubos.push_back ({ transform, textureBundle.getTextureAtlasOffset (textureIndex),
+                          textureBundle.getTextureSize (textureIndex),
+                          textureBundle.getTextureAtlasOffset (normalMapIndex),
+                          textureBundle.getTextureSize (normalMapIndex), tilingFactor, castsShadows, isLit});
     }
 
-    void initSceneData (const glm::mat4 view, const glm::vec3 lightDir, const glm::vec3 lightColor) {
+    void initSceneData (const Scene& scene) {
         glm::mat4 proj =
         glm::perspective (glm::radians (80.0f),
                           mainSurface.getCapabilities ().currentExtent.width /
                           (float)mainSurface.getCapabilities ().currentExtent.height,
-                          0.1f, 100.0f);
+                          0.1f, 200.0f);
         proj[1][1] *= -1;
-        sceneData = VulkanSceneUBO (view, proj, lightDir, lightColor, { 0, 0, 0 });
+        sceneData = VulkanSceneUBO (scene.getMainCamera()->getView(), proj, scene.lightDir, scene.lightColor, scene.groundColor, scene.skyColor);
         sceneDataUB.update (&sceneData, sizeof (VulkanSceneUBO), 0);
     }
 
@@ -225,7 +241,7 @@ class VulkanRenderer {
                                    meshPool, drawCallMeshIndices);
         swapchain.drawWithDrawer (mainImageDrawer, vertexBuffer, indexBuffer,
                                   meshPool, drawCallMeshIndices);
-        
+
         currentFrame = (currentFrame + 1) % 3;
         ubos.clear ();
         drawCallMeshIndices.clear ();
@@ -236,7 +252,7 @@ class VulkanRenderer {
     }
 
     void buildTextureAtlas () {
-        textureBundle.buildTextureAtlas();
+        textureBundle.buildTextureAtlas ();
     }
     ~VulkanRenderer () {
         destroy ();
@@ -247,8 +263,8 @@ class VulkanRenderer {
             return;
         }
         vkDeviceWaitIdle (device.getDevice ());
-        
-        shadowImageDrawer.destroy();
+
+        shadowImageDrawer.destroy ();
         mainImageDrawer.destroy ();
         sceneDataUBDescriptor.destroy ();
         sceneDataUB.destroy ();

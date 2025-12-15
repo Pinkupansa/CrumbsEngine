@@ -16,6 +16,8 @@ layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 lightProj;
     vec3 lightColor;
     vec3 lightDir;
+    vec3 groundColor;
+    vec3 skyColor;
 } scene;
 
 // Object UBO
@@ -26,6 +28,8 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     vec2 normalmapAtlasOffset;
     vec2 normalmapTextureSize;
     vec2 tilingFactor;
+    bool castsShadows;
+    bool isLit;
 } object;
 
 layout(set = 2, binding = 0) uniform sampler2D shadowSampler;
@@ -87,7 +91,7 @@ float computeDepth(vec4 lightSpacePos)
     //currentDepth = (2 * 30.0f*0.1f)/(30.0f + 0.1f - currentDepth * (30.0f - 0.1f));
     return currentDepth;
 }
-float computeShadow(vec4 lightSpacePos, vec3 N, vec3 L)
+float sampleShadow(vec4 lightSpacePos)
 {
     // Perspective divide -> NDC
     vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
@@ -108,9 +112,7 @@ float computeShadow(vec4 lightSpacePos, vec3 N, vec3 L)
     // Since mode 0 shows correct shadow map but mode 1 inverted, the projection is GL-style.
     float currentDepth = computeDepth(lightSpacePos);
 
-    // Slope-scaled bias to reduce acne
-    float nDotL = dot(N, L);
-    float bias = max(0.005, 0.01 * (1.0 - nDotL));
+    float bias = 0.0005;
 
     // In Vulkan: smaller depth = closer to light
     // If currentDepth > closestDepth (with bias) -> fragment is farther -> in shadow
@@ -118,11 +120,50 @@ float computeShadow(vec4 lightSpacePos, vec3 N, vec3 L)
         return 0.2;  // Shadow
     else
         return 1.0;  // Lit
-    
-    
 }
 
+float computeShadow(vec4 lightSpacePos){
+    // Perspective divide -> NDC
+    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+    vec2 uv = projCoords.xy * 0.5 + 0.5;
+
+    // If outside light frustum, consider fully lit
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+        return 1.0;
+
+    // PCF / blur parameters
+    float shadow = 0.0;
+    int kernelRadius = 1;         // 3x3 kernel
+    float texelSize = 1.0 / 2048.0; // adjust to your shadow map resolution
+
+    for(int x = -kernelRadius; x <= kernelRadius; ++x)
+    {
+        for(int y = -kernelRadius; y <= kernelRadius; ++y)
+        {
+            vec2 offset = vec2(float(x), float(y)) * texelSize;
+
+            // Build a temporary lightSpacePos offset by the UV offset
+            // Note: sampleShadow only uses the UV inside for sampling
+            vec4 offsetPos = lightSpacePos;
+            offsetPos.xy += offset * 2.0; // map texel offset from [0,1] to NDC [-1,1]
+
+            shadow += sampleShadow(offsetPos);
+        }
+    }
+
+    shadow /= float((kernelRadius*2+1) * (kernelRadius*2+1));
+    return shadow;
+}
+
+vec3 computeAmbient(vec3 N){
+    return mix(scene.groundColor, scene.skyColor, N.y * 0.5 + 0.5)*0.01;
+}
 void main() {
+     vec3 textureColor = computeTexColor(fragUV, object.atlasOffset, object.textureSize, object.tilingFactor, fragCamPos.z).rgb;
+    if(!object.isLit){
+        outColor = vec4(textureColor, 1.0f);
+        return;
+    }
     vec3 N = computeNormal(); 
     vec3 L = getLightDir();
 
@@ -156,15 +197,15 @@ void main() {
     
     // Mode 3: Actual lighting
     // Calculate shadow factor using stored light direction
-    float shadow = computeShadow(lightSpacePos, N, L);
+    float shadow = computeShadow(lightSpacePos);
 
     // Basic lighting calculation
     float diffuse = max(dot(N, L), 0.0);
     float specular = computeSpecularLight(N, L);
 
-    vec3 textureColor = computeTexColor(fragUV, object.atlasOffset, object.textureSize, object.tilingFactor, fragCamPos.z).rgb;
-    // Combine lighting with shadow (add small ambient)
-    vec3 lighting = (diffuse*textureColor + specular) * shadow * scene.lightColor;
+   
+    
+    vec3 lighting = (diffuse*textureColor + specular) * shadow * scene.lightColor + computeAmbient(N);
     //vec3 lighting = textureColor;
     //vec3 lighting = vec3(shadow, shadow, shadow);
     outColor = vec4(lighting, 1.0);

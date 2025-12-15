@@ -646,7 +646,7 @@ VkSampler createSampler (const VulkanDevice& device, std::string name) {
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable           = VK_FALSE;
     samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerInfo.mipLodBias              = 0.0f;
+    /*samplerInfo.mipLodBias              = 0.0f;
     samplerInfo.minLod                  = 0.0f;
     samplerInfo.maxLod                  = VK_LOD_CLAMP_NONE;
     samplerInfo.anisotropyEnable = VK_TRUE;
@@ -654,7 +654,7 @@ VkSampler createSampler (const VulkanDevice& device, std::string name) {
     //obtain physical device properties to set maxAnisotropy
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties (device.getPhysicalDevice (), &properties);
-    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;*/
 
     
 
@@ -877,6 +877,7 @@ VkImage createImageFromFile (const VulkanDevice& device,
                              VkDeviceMemory& imageMemory,
                              std::string name, int& texWidth, int& texHeight, int padding) {
     int texChannels;
+    stbi_set_flip_vertically_on_load(true);
     stbi_uc* rawPixels =
     stbi_load (filename.c_str (), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
@@ -943,7 +944,7 @@ VkImage createImageFromFile (const VulkanDevice& device,
 
 void copyImage(const VulkanDevice& device, VkImage src, VkImage dst, VkExtent3D extent, VkOffset3D offset) {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands(device, "Copy Image");
-
+    
     VkImageSubresourceLayers subResource{};
     subResource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
     subResource.baseArrayLayer = 0;
