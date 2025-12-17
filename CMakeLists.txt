@@ -82,9 +82,14 @@ add_custom_target(shaders ALL DEPENDS ${SPIRV_BINARIES})
 # Make executable depend on shaders
 add_dependencies(vulkan_test shaders)
 
+set(OpenMP_ROOT "/opt/homebrew/opt/libomp")
+find_package(OpenMP REQUIRED)
+target_link_libraries(vulkan_test PRIVATE OpenMP::OpenMP_CXX)
+
 target_compile_options(vulkan_test PRIVATE
         -fsanitize=address
         -fno-omit-frame-pointer
+        -O3
         -g
     )
     target_link_options(vulkan_test PRIVATE

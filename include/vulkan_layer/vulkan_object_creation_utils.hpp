@@ -3,6 +3,7 @@
 #include "vulkan_constants.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_surface.hpp"
+#include <omp.h>
 #include <vulkan/vulkan.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
@@ -304,13 +305,16 @@ VkDescriptorPool createDescriptorPool (const VulkanDevice& device,
 VkDescriptorSet allocateDescriptorSet (const VulkanDevice& device,
                                        const VkDescriptorSetLayout& layout,
                                        const VkDescriptorPool& pool,
-                                       std::string name, uint32_t actualCount = 0, bool isVariableCount = false) {
+                                       std::string name,
+                                       uint32_t actualCount = 0,
+                                       bool isVariableCount = false) {
 
     VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountInfo{};
     if (isVariableCount) {
-        variableDescCountInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+        variableDescCountInfo.sType =
+        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
         variableDescCountInfo.descriptorSetCount = 1;
-        variableDescCountInfo.pDescriptorCounts    = &actualCount;
+        variableDescCountInfo.pDescriptorCounts  = &actualCount;
     }
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -656,7 +660,6 @@ VkSampler createSampler (const VulkanDevice& device, std::string name) {
     vkGetPhysicalDeviceProperties (device.getPhysicalDevice (), &properties);
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;*/
 
-    
 
     VkSampler sampler;
     vkCreateSampler (device.getDevice (), &samplerInfo, nullptr, &sampler);
@@ -677,6 +680,7 @@ void createBufferWithData (const VulkanDevice& device,
 
     // map memory and copy data
     void* mappedData;
+
     vkMapMemory (device.getDevice (), bufferMemory, 0, bufferSize, 0, &mappedData);
     memcpy (mappedData, data, static_cast<size_t> (bufferSize));
     vkUnmapMemory (device.getDevice (), bufferMemory);
@@ -743,7 +747,7 @@ void transitionImageLayout (const VulkanDevice& device,
     VkPipelineStageFlags sourceStage;
     VkPipelineStageFlags destinationStage;
 
-    
+
     if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
         newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
         barrier.srcAccessMask = 0;
@@ -773,13 +777,12 @@ void transitionImageLayout (const VulkanDevice& device,
         sourceStage      = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+               newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        sourceStage      = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    else {
+        sourceStage           = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage      = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    } else {
         throw std::invalid_argument ("Unsupported layout transition!");
     }
 
@@ -814,92 +817,291 @@ void copyBufferToImage (const VulkanDevice& device,
 
     endSingleTimeCommands (device, commandBuffer);
 }
+
+using Clock = std::chrono::high_resolution_clock;
 // Pads an RGBA8 image by extruding edge pixels.
 // - srcPixels: output of stbi_load (RGBA8)
 // - width, height: original image size
 // - paddingPx: padding size in pixels
 // - outWidth, outHeight: padded image size
 // Returns: newly allocated RGBA8 buffer (caller owns it)
-std::vector<uint8_t> padImageRGBA(
-    const uint8_t* srcPixels,
-    int width,
-    int height,
-    int paddingPx,
-    int& outWidth,
-    int& outHeight
-) {
-    outWidth  = width  + paddingPx * 2;
+std::vector<uint8_t> padImageRGBA (const std::vector<uint8_t>& srcPixels,
+                                   int width,
+                                   int height,
+                                   int paddingPx,
+                                   int& outWidth,
+                                   int& outHeight) {
+
+    auto time = Clock::now();
+    // Compute padded dimensions
+    outWidth  = width + paddingPx * 2;
     outHeight = height + paddingPx * 2;
 
-    std::vector<uint8_t> out(outWidth * outHeight * 4);
+    std::vector<uint8_t> out (outWidth * outHeight * 4, 0);
 
-    auto src = [&](int x, int y) {
-        return srcPixels + (y * width + x) * 4;
+    // Lambda to access source pixels
+    auto src = [&] (int x, int y) {
+        return srcPixels.data () + (y * width + x) * 4;
     };
 
-    auto dst = [&](int x, int y) {
-        return out.data() + (y * outWidth + x) * 4;
+    // Lambda to access destination pixels
+    auto dst = [&] (int x, int y) {
+        return out.data () + (y * outWidth + x) * 4;
     };
 
     // 1️⃣ Copy original image into center
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            std::memcpy(dst(x + paddingPx, y + paddingPx), src(x, y), 4);
+            std::memcpy (dst (x + paddingPx, y + paddingPx), src (x, y), 4);
         }
     }
 
     // 2️⃣ Extrude left & right edges
     for (int y = 0; y < height; ++y) {
         for (int p = 0; p < paddingPx; ++p) {
-            std::memcpy(dst(p, y + paddingPx), src(0, y), 4);                    // left
-            std::memcpy(dst(outWidth - 1 - p, y + paddingPx),
-                        src(width - 1, y), 4);                                  // right
+            std::memcpy (dst (p, y + paddingPx), src (0, y), 4); // left
+            std::memcpy (dst (outWidth - 1 - p, y + paddingPx), src (width - 1, y), 4); // right
         }
     }
 
     // 3️⃣ Extrude top & bottom edges (including corners)
     for (int x = 0; x < outWidth; ++x) {
         for (int p = 0; p < paddingPx; ++p) {
-            std::memcpy(dst(x, p),
-                        dst(x, paddingPx), 4);                                  // top
-            std::memcpy(dst(x, outHeight - 1 - p),
-                        dst(x, outHeight - 1 - paddingPx), 4);                  // bottom
+            std::memcpy (dst (x, p), dst (x, paddingPx), 4); // top
+            std::memcpy (dst (x, outHeight - 1 - p),
+                         dst (x, outHeight - 1 - paddingPx), 4); // bottom
         }
+    }
+    float dt = std::chrono::duration<float> (Clock::now () - time).count ();
+    Debug::LogWarning("Padding : " + std::to_string(dt));
+    return out;
+}
+std::vector<glm::vec4> convertU8ToVec4 (const std::vector<uint8_t>& u8Data, bool srgb = false) {
+    // Ensure the input size is a multiple of 3 (RGB)
+    assert (u8Data.size () % 4 == 0);
+
+    std::vector<glm::vec4> out (u8Data.size () / 4);
+
+#pragma omp parallel for
+    for (size_t i = 0; i < u8Data.size (); i += 4) {
+        float r = u8Data[i] / 255.0f;
+        float g = u8Data[i + 1] / 255.0f;
+        float b = u8Data[i + 2] / 255.0f;
+        float a = u8Data[i + 3] / 255.0f;
+        if (srgb) {
+            auto toLinear = [] (float c) {
+                if (c <= 0.04045f)
+                    return c / 12.92f;
+                else
+                    return powf ((c + 0.055f) / 1.055f, 2.4f);
+            };
+            r = toLinear (r);
+            g = toLinear (g);
+            b = toLinear (b);
+            a = toLinear (a);
+        }
+
+        out[i / 4] = { r, g, b, a };
     }
 
     return out;
 }
 
-VkImage createImageFromFile (const VulkanDevice& device,
-                             const std::string& filename,
-                             VkFormat format,
-                             VkImageUsageFlags usage,
-                             VkDeviceMemory& imageMemory,
-                             std::string name, int& texWidth, int& texHeight, int padding) {
-    int texChannels;
-    stbi_set_flip_vertically_on_load(true);
-    stbi_uc* rawPixels =
-    stbi_load (filename.c_str (), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
-    std::vector<uint8_t> pixels = padImageRGBA(
-        rawPixels,
-        texWidth,
-        texHeight,
-        padding,
-        texWidth,
-        texHeight
-    );
-    VkDeviceSize imageSize = texWidth * texHeight * 4;
+std::vector<uint8_t>
+convertVec4ToU8 (const std::vector<glm::vec4>& floatData, bool srgb = false) {
+    std::vector<uint8_t> out (floatData.size () * 4);
 
-    if (!pixels.data ()) {
-        throw std::runtime_error ("Failed to load texture image!");
+    #pragma omp parallel for
+    for (int i = 0; i < floatData.size (); i++) {
+        glm::vec4 c = floatData[i];
+        float r     = c.r;
+        float g     = c.g;
+        float b     = c.b;
+        float a     = c.a;
+
+        if (srgb) {
+            auto toSrgb = [] (float x) -> float {
+                if (x <= 0.0031308f)
+                    return 12.92f * x;
+                else
+                    return 1.055f * powf (x, 1.0f / 2.4f) - 0.055f;
+            };
+            r = toSrgb (r);
+            g = toSrgb (g);
+            b = toSrgb (b);
+            a = toSrgb (a);
+        }
+
+        // Clamp to [0,1] and convert to uint8
+        int startInd = 4 * i;
+        out[startInd] =
+        static_cast<uint8_t> (std::round (std::clamp (r, 0.0f, 1.0f) * 255.0f));
+        out[startInd + 1] =
+        static_cast<uint8_t> (std::round (std::clamp (g, 0.0f, 1.0f) * 255.0f));
+        out[startInd + 2] =
+        static_cast<uint8_t> (std::round (std::clamp (b, 0.0f, 1.0f) * 255.0f));
+        out[startInd + 3] =
+        static_cast<uint8_t> (std::round (std::clamp (a, 0.0f, 1.0f) * 255.0f));
     }
+
+    return out;
+}
+
+std::vector<float> makeGaussianKernel (float sigma) {
+    float radius   = std::ceil (3 * sigma);
+    int kernelSize = 2 * radius + 1;
+    std::vector<float> kernel (kernelSize);
+    float sum = 0;
+    for (int i = -radius; i <= radius; i++) {
+        kernel[i + radius] = exp (-(i * i) / (2 * sigma * sigma));
+        sum += kernel[i + radius];
+    }
+    for (int i = 0; i < kernelSize; i++) {
+        kernel[i] /= sum;
+    }
+    return kernel;
+}
+
+
+inline int mod (int x, int m) {
+    return (x % m + m) % m;
+}
+
+std::vector<glm::vec4> applyHorizontalBlur (const std::vector<glm::vec4>& pixels,
+                                            int texWidth,
+                                            int texHeight,
+                                            const std::vector<float>& kernel) {
+    int radius = kernel.size () / 2;
+    std::vector<glm::vec4> destination (pixels.size ());
+    const glm::vec4* src = pixels.data ();      // pointer to input
+    glm::vec4* dst       = destination.data (); // pointer to output
+
+#pragma omp parallel for
+    for (int y = 0; y < texHeight; ++y) {
+        const glm::vec4* row = src + y * texWidth; // start of row y
+        glm::vec4* outRow    = dst + y * texWidth;
+
+        for (int x = radius; x < texWidth - radius; ++x) {
+            glm::vec4 sum (0.0f);
+
+            const glm::vec4* p = row + x; // pointer to pixel (x, y)
+
+            for (int k = -radius; k <= radius; ++k) {
+                sum += kernel[k + radius] * row[x + k];
+            }
+
+            outRow[x] = sum;
+        }
+        for (int x = 0; x < radius; ++x) {
+            glm::vec4 sum (0.0f);
+
+            const glm::vec4* p = row + x; // pointer to pixel (x, y)
+
+            for (int k = -radius; k <= radius; ++k) {
+                sum += kernel[k + radius] * row[mod (x + k, texWidth)];
+            }
+
+            outRow[x] = sum;
+        }
+        for (int x = texWidth - radius; x < texWidth; ++x) {
+            glm::vec4 sum (0.0f);
+
+            const glm::vec4* p = row + x; // pointer to pixel (x, y)
+
+            for (int k = -radius; k <= radius; ++k) {
+                sum += kernel[k + radius] * row[(x + k) % texWidth];
+            }
+
+            outRow[x] = sum;
+        }
+    }
+
+    return destination;
+}
+
+std::vector<glm::vec4> applyVerticalBlurAndDownscale(const std::vector<glm::vec4>& srcPixels,
+                                                     int texWidth,
+                                                     int texHeight,
+                                                     const std::vector<float>& kernel) {
+    int newTexWidth = texWidth / 2;
+    int newTexHeight = texHeight / 2;
+    int radius = kernel.size() / 2;
+
+    std::vector<glm::vec4> dstPixels(newTexWidth * newTexHeight);
+
+    #pragma omp parallel for
+    for (int x = 0; x < newTexWidth; ++x) {
+        for (int y = 0; y < newTexHeight; ++y) {
+            glm::vec4 sum(0.0f);
+
+            // Vertical blur with wrap-around
+            for (int k = -radius; k <= radius; ++k) {
+                int srcY = 2 * y + k;
+                // wrap-around vertically
+                srcY = (srcY + texHeight) % texHeight;
+
+                // Average the 2x2 block horizontally
+                glm::vec4 px = 0.5f * (srcPixels[srcY * texWidth + 2 * x] +
+                                        srcPixels[srcY * texWidth + 2 * x + 1]);
+
+                sum += kernel[k + radius] * srcPixels[srcY * texWidth + 2 * x] ;
+            }
+
+            dstPixels[y * newTexWidth + x] = sum;
+        }
+    }
+
+    return dstPixels;
+}
+std::vector<uint8_t>
+applyGaussianKernel (const std::vector<uint8_t>& pixels, int texWidth, int texHeight, float sigma) {
+    auto time                 = Clock::now ();
+    std::vector<float> kernel = makeGaussianKernel (sigma);
+    float dt = std::chrono::duration<float> (Clock::now () - time).count ();
+    Debug::LogWarning ("Construct Kernel : " + std::to_string (dt));
+
+    time                             = Clock::now ();
+    std::vector<glm::vec4> rgbFormat = convertU8ToVec4 (pixels);
+    dt = std::chrono::duration<float> (Clock::now () - time).count ();
+    Debug::LogWarning ("RGB Conversion : " + std::to_string (dt));
+
+    time = Clock::now ();
+    std::vector<glm::vec4> hblurred =
+    applyHorizontalBlur (rgbFormat, texWidth, texHeight, kernel);
+    dt = std::chrono::duration<float> (Clock::now () - time).count ();
+    Debug::LogWarning ("H Blurring : " + std::to_string (dt));
+
+    time = Clock::now ();
+    std::vector<glm::vec4> vblurred =
+    applyVerticalBlurAndDownscale(hblurred, texWidth, texHeight, kernel);
+    dt = std::chrono::duration<float> (Clock::now () - time).count ();
+    Debug::LogWarning ("V Blurring : " + std::to_string (dt));
+
+    time                             = Clock::now ();
+    std::vector<glm::uint8_t> output = convertVec4ToU8 (vblurred);
+    dt = std::chrono::duration<float> (Clock::now () - time).count ();
+    Debug::LogWarning ("uint8 conversion " + std::to_string (dt));
+
+
+    return output;
+}
+
+VkImage createImageFromPixelArray (const VulkanDevice& device,
+                                   const std::vector<uint8_t>& pixels,
+                                   VkDeviceMemory& imageMemory,
+                                   VkFormat format,
+                                   VkImageUsageFlags usage,
+                                   std::string name,
+                                   int texWidth,
+                                   int texHeight) {
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    createBufferWithData (device, VulkanBufferType::Staging, imageSize, pixels.data(),
-                          stagingBuffer, stagingBufferMemory, "Texture Staging Buffer");
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-    stbi_image_free (rawPixels);
+    createBufferWithData (device, VulkanBufferType::Staging, imageSize,
+                          pixels.data (), stagingBuffer, stagingBufferMemory,
+                          "Texture Staging Buffer");
 
     // Ensure the image is created with TRANSFER_DST and TRANSFER_SRC usage so
     // we can transition it to TRANSFER_SRC_OPTIMAL later when copying from it
@@ -913,18 +1115,6 @@ VkImage createImageFromFile (const VulkanDevice& device,
 
     transitionImageLayout (device, textureImage, format, VK_IMAGE_LAYOUT_UNDEFINED,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        // Loads an image from disk and uploads it into a GPU image. Optionally downscales
-        // the image on the CPU before upload by specifying targetWidth/targetHeight.
-        // texWidth/texHeight are set to the final (possibly resized) dimensions.
-        int targetWidth = 0; // Default target width
-        int targetHeight = 0; // Default target height
-        // If only one target dimension is provided, preserve aspect ratio
-        if (targetWidth > 0 && targetHeight == 0) {
-            targetHeight = static_cast<int>(std::round((float)texHeight * (float)targetWidth / (float)texWidth));
-        } else if (targetHeight > 0 && targetWidth == 0) {
-            targetWidth = static_cast<int>(std::round((float)texWidth * (float)targetHeight / (float)texHeight));
-        }
-        // Additional code for resizing and uploading pixels...
 
     copyBufferToImage (device, stagingBuffer, textureImage, static_cast<uint32_t> (texWidth),
                        static_cast<uint32_t> (texHeight));
@@ -934,17 +1124,84 @@ VkImage createImageFromFile (const VulkanDevice& device,
 
     vkDestroyBuffer (device.getDevice (), stagingBuffer, nullptr);
     vkFreeMemory (device.getDevice (), stagingBufferMemory, nullptr);
-
-    //downscale image so that its max dimension is lowered to the closest power of two less than or equal to 512
-    
-
     return textureImage;
 }
 
-
-void copyImage(const VulkanDevice& device, VkImage src, VkImage dst, VkExtent3D extent, VkOffset3D offset) {
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands(device, "Copy Image");
+void createImageAndMipmapsFromFile(const VulkanDevice& device,
+                                   const std::string& filename,
+                                   VkFormat format,
+                                   VkImageUsageFlags usage,
+                                   std::vector<VkImage>& mipmaps,
+                                   std::vector<VkDeviceMemory>& mipmapsMemories,
+                                   int nMipmaps,
+                                   std::string name,
+                                   std::vector<int>& mipmapsWidths,
+                                   std::vector<int>& mipmapsHeights,
+                                   int padding){
     
+    mipmaps.resize(nMipmaps);
+    mipmapsMemories.resize(nMipmaps);
+
+    mipmapsWidths.resize(nMipmaps);
+    mipmapsHeights.resize(nMipmaps);
+
+    const float SIGMA_TRANSITION = 0.7071f; // 1/sqrt(2)
+    int texChannels;
+    stbi_set_flip_vertically_on_load (true);
+    stbi_uc* rawPixels =
+    stbi_load (filename.c_str (), &mipmapsWidths[0], &mipmapsHeights[0], &texChannels, STBI_rgb_alpha);
+    if (!rawPixels) {
+        throw std::runtime_error ("Failed to load texture image!");
+    }
+    std::vector<uint8_t> rawPixelsArray (rawPixels, rawPixels + 4 * mipmapsWidths[0] * mipmapsHeights[0]);
+
+    std::vector<std::vector<uint8_t>> mipmapsPixelArrays(nMipmaps);
+    mipmapsPixelArrays[0] = rawPixelsArray;
+
+    for(int i = 1; i < nMipmaps; i++){
+        mipmapsPixelArrays[i] = applyGaussianKernel(mipmapsPixelArrays[i-1], mipmapsWidths[i-1], mipmapsHeights[i-1], SIGMA_TRANSITION);
+        mipmapsWidths[i] = mipmapsWidths[i-1]/2;
+        mipmapsHeights[i] = mipmapsHeights[i-1]/2;
+    }
+
+    for(int i = 0; i < nMipmaps; i++){
+        
+        mipmapsPixelArrays[i] = padImageRGBA(mipmapsPixelArrays[i], mipmapsWidths[i], mipmapsHeights[i], padding, mipmapsWidths[i], mipmapsHeights[i]);
+        mipmaps[i] = createImageFromPixelArray(device, mipmapsPixelArrays[i], mipmapsMemories[i], format, usage, name + " mipmap " + std::to_string(i), mipmapsWidths[i], mipmapsHeights[i]);
+    }
+    stbi_image_free (rawPixels);
+
+}
+
+VkImage createImageFromFile (const VulkanDevice& device,
+                             const std::string& filename,
+                             VkFormat format,
+                             VkImageUsageFlags usage,
+                             VkDeviceMemory& imageMemory,
+                             std::string name,
+                             int& texWidth,
+                             int& texHeight,
+                             int padding) {
+    int texChannels;
+    stbi_set_flip_vertically_on_load (true);
+    stbi_uc* rawPixels =
+    stbi_load (filename.c_str (), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    if (!rawPixels) {
+        throw std::runtime_error ("Failed to load texture image!");
+    }
+    std::vector<uint8_t> rawPixelsArray (rawPixels, rawPixels + 4 * texWidth * texHeight);
+    
+    std::vector<uint8_t>  pixels = padImageRGBA (rawPixelsArray, texWidth, texHeight, padding, texWidth, texHeight);
+    
+    VkImage textureImage =
+    createImageFromPixelArray (device, pixels, imageMemory, format, usage, name,
+                               texWidth, texHeight);
+    stbi_image_free (rawPixels);
+    return textureImage;
+}
+void copyImage (const VulkanDevice& device, VkImage src, VkImage dst, VkExtent3D extent, VkOffset3D offset) {
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands (device, "Copy Image");
+
     VkImageSubresourceLayers subResource{};
     subResource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
     subResource.baseArrayLayer = 0;
@@ -957,76 +1214,65 @@ void copyImage(const VulkanDevice& device, VkImage src, VkImage dst, VkExtent3D 
     copyRegion.extent         = extent;
     copyRegion.dstOffset      = offset;
 
-    transitionImageLayout(device, dst, DEFAULT_COLOR_FORMAT,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    transitionImageLayout (device, dst, DEFAULT_COLOR_FORMAT,
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vkCmdCopyImage(commandBuffer,
-                   src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1, &copyRegion);
+    vkCmdCopyImage (commandBuffer, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-    endSingleTimeCommands(device, commandBuffer);
+    endSingleTimeCommands (device, commandBuffer);
 
-    transitionImageLayout(device, dst, DEFAULT_COLOR_FORMAT,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    transitionImageLayout (device, dst, DEFAULT_COLOR_FORMAT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
-VkImage blitDownsizedImage(
-    const VulkanDevice& device,
-    VkImage src,
-    VkFormat format,
-    uint32_t srcWidth,
-    uint32_t srcHeight,
-    uint32_t dstWidth,
-    uint32_t dstHeight,
-    VkDeviceMemory& imageMemory,
-    const char* name)
-{
+VkImage blitDownsizedImage (const VulkanDevice& device,
+                            VkImage src,
+                            VkFormat format,
+                            uint32_t srcWidth,
+                            uint32_t srcHeight,
+                            uint32_t dstWidth,
+                            uint32_t dstHeight,
+                            VkDeviceMemory& imageMemory,
+                            const char* name) {
     // --- 1. Create destination image ---
     VkExtent2D dstExtent = { dstWidth, dstHeight };
 
-    VkImageUsageFlags usage =
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-        VK_IMAGE_USAGE_SAMPLED_BIT;
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    VkImage dst = createImage(device, dstExtent, format, usage, name);
+    VkImage dst = createImage (device, dstExtent, format, usage, name);
 
-    imageMemory = allocateAndBindImageMemory(device, dst);
+    imageMemory = allocateAndBindImageMemory (device, dst);
 
     // --- 2. Transition ONLY the destination image ---
-    transitionImageLayout(device, dst, format,
-                          VK_IMAGE_LAYOUT_UNDEFINED, // assumed initial
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    transitionImageLayout (device, dst, format,
+                           VK_IMAGE_LAYOUT_UNDEFINED, // assumed initial
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Source stays in TRANSFER_SRC_OPTIMAL the entire time.
 
     // --- 3. Perform the blit ---
-    VkCommandBuffer cmd = beginSingleTimeCommands(device, "Blit Image");
+    VkCommandBuffer cmd = beginSingleTimeCommands (device, "Blit Image");
 
     VkImageBlit region{};
     region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     region.srcSubresource.layerCount = 1;
-    region.srcOffsets[1] = { (int)srcWidth, (int)srcHeight, 1 };
+    region.srcOffsets[1]             = { (int)srcWidth, (int)srcHeight, 1 };
 
     region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     region.dstSubresource.layerCount = 1;
-    region.dstOffsets[1] = { (int)dstWidth, (int)dstHeight, 1 };
+    region.dstOffsets[1]             = { (int)dstWidth, (int)dstHeight, 1 };
 
-    vkCmdBlitImage(cmd,
-        src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &region,
-        VK_FILTER_LINEAR);
+    vkCmdBlitImage (cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_LINEAR);
 
-    endSingleTimeCommands(device, cmd);
+    endSingleTimeCommands (device, cmd);
 
     // --- 4. Transition destination to shader-read layout ---
-    transitionImageLayout(device, dst, format,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    transitionImageLayout (device, dst, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     // Source stays unchanged: still TRANSFER_SRC_OPTIMAL
 

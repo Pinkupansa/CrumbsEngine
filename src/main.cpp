@@ -53,7 +53,7 @@ int main () {
     Mesh quadMesh      = generateQuad ();
     uint32_t quadIndex = renderer.loadMesh (quadMesh);
 
-    Mesh sphere          = loadOBJShared ("cottage_fbx.fbx");
+    Mesh sphere          = importMesh ("cottage_fbx.fbx");
     uint32_t sphereIndex = renderer.loadMesh (sphere);
 
     Mesh debugTextureQuad          = generateQuad ();
@@ -74,7 +74,7 @@ int main () {
     int grassNormalIndex = renderer.loadTexture ("textures/grass2_specular.png");
     int rockwallTexIndex =
     renderer.loadTexture ("textures/cottage_diffuse.png");
-    int brickTexIndex = renderer.loadTexture ("textures/tiles.jpg");
+    int brickTexIndex = renderer.loadTexture ("textures/rockwall.jpg");
     int stonewallNormalMapIndex =
     renderer.loadTexture ("textures/cottage_normal.png");
 
@@ -90,7 +90,7 @@ int main () {
     sphereObject.transform.rotate ({ 1, 0, 0 }, -1.57);
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
-    Material m2 ({ 1, 1, 1, 1 }, 1, grassIndex, grassNormalIndex, { 10, 10 }, true, true);
+    Material m2 ({ 1, 1, 1, 1 }, 1, brickTexIndex, grassNormalIndex, { 10, 10 }, true, true);
     RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
     floorObject.transform.rotate ({ 1, 0, 0 }, 0);
@@ -124,7 +124,7 @@ int main () {
         std::chrono::duration<float> (currentTime - lastTime).count (); // in seconds
         lastTime = currentTime;
         elapsedTime += deltaTime;
-
+        //Debug::Log(std::to_string(1/deltaTime));
         float speed = 3;
 
         if (inputs.isPressed (GLFW_KEY_W)) {

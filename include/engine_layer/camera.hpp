@@ -29,7 +29,7 @@ class Camera{
             R[0] = transform.right();
             R[1] = transform.up();
             R[2] = -transform.forward();
-            Debug::Log(std::to_string(transform.right().x) + " " + std::to_string(transform.right().y) + " " + std::to_string(transform.right().z));
+            //Debug::Log(std::to_string(transform.right().x) + " " + std::to_string(transform.right().y) + " " + std::to_string(transform.right().z));
             glm::quat flipped = glm::quat_cast(R);
             return glm::mat4_cast(glm::conjugate(flipped)) * glm::translate(glm::mat4(1.0f), -transform.position);
         }

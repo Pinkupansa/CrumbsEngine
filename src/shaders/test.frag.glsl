@@ -34,7 +34,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
 layout(set = 2, binding = 0) uniform sampler2D shadowSampler;
 
-layout(set = 3, binding = 0) uniform sampler2D textureAtlas;
+layout(set = 3, binding = 0) uniform sampler2D textureAtlas[7];
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
@@ -46,11 +46,40 @@ vec2 fractVec(vec2 v) {
     return v - floor(v);
 }
 vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
-    if(atlasOffset.r < 0){ 
-        return vec4(1.0f, 1.0f, 1.0f, 1.0f);
-    }
-    vec2 atlasUV =  clampVec(atlasOffset + fractVec(uv * tilingFactor) * texSize, atlasOffset + 0.0002, atlasOffset + texSize - 0.0002);
-    return texture(textureAtlas, atlasUV);
+    if(atlasOffset.r < 0.0) return vec4(1.0);
+
+    vec2 screenResolution = vec2(1920, 1080);
+    // Scale derivatives to screen resolution
+    vec2 uv_dx = dFdx(uv) * screenResolution.x;
+    vec2 uv_dy = dFdy(uv) * screenResolution.y;
+
+    // Scale to texture space
+    vec2 dx_tex = uv_dx * texSize * tilingFactor;
+    vec2 dy_tex = uv_dy * texSize * tilingFactor;
+
+    // Pixel footprint in texels
+    float pixelFootprint = abs(dx_tex.x * dy_tex.y - dx_tex.y * dy_tex.x);
+
+    float mipLevel = log2(pixelFootprint);
+    float mip0 = floor(mipLevel);
+    float mip1 = mip0 + 1.0;
+
+
+    float t = mipLevel - mip0; // fractional part
+
+    int index0 = clamp(int(mip0), 0, 6);
+    int index1 = clamp(int(mip1), 0, 6);
+
+    vec2 subUV = fract(uv * tilingFactor);
+    vec2 atlasUV = atlasOffset + subUV * texSize;
+
+    vec4 color0 = texture(textureAtlas[index0], atlasUV);
+    vec4 color1 = texture(textureAtlas[index1], atlasUV);
+
+    vec4 finalColor = mix(color0, color1, t);
+
+
+    return finalColor;
 }
 
 vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor, float depth){
