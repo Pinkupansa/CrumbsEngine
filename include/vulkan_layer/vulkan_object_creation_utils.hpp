@@ -832,7 +832,7 @@ std::vector<uint8_t> padImageRGBA (const std::vector<uint8_t>& srcPixels,
                                    int& outWidth,
                                    int& outHeight) {
 
-    auto time = Clock::now();
+    auto time = Clock::now ();
     // Compute padded dimensions
     outWidth  = width + paddingPx * 2;
     outHeight = height + paddingPx * 2;
@@ -873,7 +873,7 @@ std::vector<uint8_t> padImageRGBA (const std::vector<uint8_t>& srcPixels,
         }
     }
     float dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning("Padding : " + std::to_string(dt));
+    Debug::LogWarning ("Padding : " + std::to_string (dt));
     return out;
 }
 std::vector<glm::vec4> convertU8ToVec4 (const std::vector<uint8_t>& u8Data, bool srgb = false) {
@@ -912,7 +912,7 @@ std::vector<uint8_t>
 convertVec4ToU8 (const std::vector<glm::vec4>& floatData, bool srgb = false) {
     std::vector<uint8_t> out (floatData.size () * 4);
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int i = 0; i < floatData.size (); i++) {
         glm::vec4 c = floatData[i];
         float r     = c.r;
@@ -972,45 +972,24 @@ std::vector<glm::vec4> applyHorizontalBlur (const std::vector<glm::vec4>& pixels
                                             int texWidth,
                                             int texHeight,
                                             const std::vector<float>& kernel) {
+    assert (pixels.size () == texWidth * texHeight);
     int radius = kernel.size () / 2;
+
     std::vector<glm::vec4> destination (pixels.size ());
     const glm::vec4* src = pixels.data ();      // pointer to input
     glm::vec4* dst       = destination.data (); // pointer to output
-
-#pragma omp parallel for
+    int effectiveRad = std::min(radius, texWidth);
+    
+    #pragma omp parallel for
     for (int y = 0; y < texHeight; ++y) {
         const glm::vec4* row = src + y * texWidth; // start of row y
         glm::vec4* outRow    = dst + y * texWidth;
 
-        for (int x = radius; x < texWidth - radius; ++x) {
+        for (int x = 0; x < texWidth; ++x) {
             glm::vec4 sum (0.0f);
 
-            const glm::vec4* p = row + x; // pointer to pixel (x, y)
-
-            for (int k = -radius; k <= radius; ++k) {
-                sum += kernel[k + radius] * row[x + k];
-            }
-
-            outRow[x] = sum;
-        }
-        for (int x = 0; x < radius; ++x) {
-            glm::vec4 sum (0.0f);
-
-            const glm::vec4* p = row + x; // pointer to pixel (x, y)
-
-            for (int k = -radius; k <= radius; ++k) {
-                sum += kernel[k + radius] * row[mod (x + k, texWidth)];
-            }
-
-            outRow[x] = sum;
-        }
-        for (int x = texWidth - radius; x < texWidth; ++x) {
-            glm::vec4 sum (0.0f);
-
-            const glm::vec4* p = row + x; // pointer to pixel (x, y)
-
-            for (int k = -radius; k <= radius; ++k) {
-                sum += kernel[k + radius] * row[(x + k) % texWidth];
+            for (int k = -effectiveRad; k <= effectiveRad; ++k) {
+                sum += kernel[k + radius] * row[(x + k + texWidth) % texWidth];
             }
 
             outRow[x] = sum;
@@ -1020,32 +999,33 @@ std::vector<glm::vec4> applyHorizontalBlur (const std::vector<glm::vec4>& pixels
     return destination;
 }
 
-std::vector<glm::vec4> applyVerticalBlurAndDownscale(const std::vector<glm::vec4>& srcPixels,
-                                                     int texWidth,
-                                                     int texHeight,
-                                                     const std::vector<float>& kernel) {
-    int newTexWidth = texWidth / 2;
+std::vector<glm::vec4> applyVerticalBlurAndDownscale (const std::vector<glm::vec4>& srcPixels,
+                                                      int texWidth,
+                                                      int texHeight,
+                                                      const std::vector<float>& kernel) {
+    int newTexWidth  = texWidth / 2;
     int newTexHeight = texHeight / 2;
-    int radius = kernel.size() / 2;
+    int radius       = kernel.size () / 2;
+    int effectiveRad = std::min(radius, texHeight);
+    std::vector<glm::vec4> dstPixels (newTexWidth * newTexHeight);
 
-    std::vector<glm::vec4> dstPixels(newTexWidth * newTexHeight);
-
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int x = 0; x < newTexWidth; ++x) {
         for (int y = 0; y < newTexHeight; ++y) {
-            glm::vec4 sum(0.0f);
+            glm::vec4 sum (0.0f);
 
             // Vertical blur with wrap-around
-            for (int k = -radius; k <= radius; ++k) {
+            for (int k = -effectiveRad; k <= effectiveRad; ++k) {
                 int srcY = 2 * y + k;
                 // wrap-around vertically
                 srcY = (srcY + texHeight) % texHeight;
 
                 // Average the 2x2 block horizontally
-                glm::vec4 px = 0.5f * (srcPixels[srcY * texWidth + 2 * x] +
-                                        srcPixels[srcY * texWidth + 2 * x + 1]);
+                glm::vec4 px = 0.5f *
+                (srcPixels[srcY * texWidth + 2 * x] +
+                 srcPixels[srcY * texWidth + 2 * x + 1]);
 
-                sum += kernel[k + radius] * srcPixels[srcY * texWidth + 2 * x] ;
+                sum += kernel[k + radius] * srcPixels[srcY * texWidth + 2 * x];
             }
 
             dstPixels[y * newTexWidth + x] = sum;
@@ -1056,32 +1036,17 @@ std::vector<glm::vec4> applyVerticalBlurAndDownscale(const std::vector<glm::vec4
 }
 std::vector<uint8_t>
 applyGaussianKernel (const std::vector<uint8_t>& pixels, int texWidth, int texHeight, float sigma) {
-    auto time                 = Clock::now ();
     std::vector<float> kernel = makeGaussianKernel (sigma);
-    float dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning ("Construct Kernel : " + std::to_string (dt));
-
-    time                             = Clock::now ();
     std::vector<glm::vec4> rgbFormat = convertU8ToVec4 (pixels);
-    dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning ("RGB Conversion : " + std::to_string (dt));
 
-    time = Clock::now ();
     std::vector<glm::vec4> hblurred =
     applyHorizontalBlur (rgbFormat, texWidth, texHeight, kernel);
-    dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning ("H Blurring : " + std::to_string (dt));
 
-    time = Clock::now ();
+
     std::vector<glm::vec4> vblurred =
-    applyVerticalBlurAndDownscale(hblurred, texWidth, texHeight, kernel);
-    dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning ("V Blurring : " + std::to_string (dt));
-
-    time                             = Clock::now ();
+    applyVerticalBlurAndDownscale (hblurred, texWidth, texHeight, kernel);
+   
     std::vector<glm::uint8_t> output = convertVec4ToU8 (vblurred);
-    dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning ("uint8 conversion " + std::to_string (dt));
 
 
     return output;
@@ -1127,50 +1092,58 @@ VkImage createImageFromPixelArray (const VulkanDevice& device,
     return textureImage;
 }
 
-void createImageAndMipmapsFromFile(const VulkanDevice& device,
-                                   const std::string& filename,
-                                   VkFormat format,
-                                   VkImageUsageFlags usage,
-                                   std::vector<VkImage>& mipmaps,
-                                   std::vector<VkDeviceMemory>& mipmapsMemories,
-                                   int nMipmaps,
-                                   std::string name,
-                                   std::vector<int>& mipmapsWidths,
-                                   std::vector<int>& mipmapsHeights,
-                                   int padding){
-    
-    mipmaps.resize(nMipmaps);
-    mipmapsMemories.resize(nMipmaps);
+void createImageAndMipmapsFromFile (const VulkanDevice& device,
+                                    const std::string& filename,
+                                    VkFormat format,
+                                    VkImageUsageFlags usage,
+                                    std::vector<VkImage>& mipmaps,
+                                    std::vector<VkDeviceMemory>& mipmapsMemories,
+                                    int nMipmaps,
+                                    std::string name,
+                                    std::vector<int>& mipmapsWidths,
+                                    std::vector<int>& mipmapsHeights,
+                                    int padding) {
 
-    mipmapsWidths.resize(nMipmaps);
-    mipmapsHeights.resize(nMipmaps);
+    mipmaps.resize (nMipmaps);
+    mipmapsMemories.resize (nMipmaps);
 
-    const float SIGMA_TRANSITION = 0.7071f; // 1/sqrt(2)
+    mipmapsWidths.resize (nMipmaps);
+    mipmapsHeights.resize (nMipmaps);
+
+    const float SIGMA_TRANSITION = 4; // best results combined with textureLod sampling in the shader
     int texChannels;
     stbi_set_flip_vertically_on_load (true);
-    stbi_uc* rawPixels =
-    stbi_load (filename.c_str (), &mipmapsWidths[0], &mipmapsHeights[0], &texChannels, STBI_rgb_alpha);
+    stbi_uc* rawPixels = stbi_load (filename.c_str (), &mipmapsWidths[0],
+                                    &mipmapsHeights[0], &texChannels, STBI_rgb_alpha);
     if (!rawPixels) {
         throw std::runtime_error ("Failed to load texture image!");
     }
-    std::vector<uint8_t> rawPixelsArray (rawPixels, rawPixels + 4 * mipmapsWidths[0] * mipmapsHeights[0]);
+    std::vector<uint8_t> rawPixelsArray (rawPixels,
+                                         rawPixels +
+                                         4 * mipmapsWidths[0] * mipmapsHeights[0]);
 
-    std::vector<std::vector<uint8_t>> mipmapsPixelArrays(nMipmaps);
+    std::vector<std::vector<uint8_t>> mipmapsPixelArrays (nMipmaps);
     mipmapsPixelArrays[0] = rawPixelsArray;
 
-    for(int i = 1; i < nMipmaps; i++){
-        mipmapsPixelArrays[i] = applyGaussianKernel(mipmapsPixelArrays[i-1], mipmapsWidths[i-1], mipmapsHeights[i-1], SIGMA_TRANSITION);
-        mipmapsWidths[i] = mipmapsWidths[i-1]/2;
-        mipmapsHeights[i] = mipmapsHeights[i-1]/2;
+    for (int i = 1; i < nMipmaps; i++) {
+        mipmapsPixelArrays[i] =
+        applyGaussianKernel (mipmapsPixelArrays[i - 1], mipmapsWidths[i - 1],
+                             mipmapsHeights[i - 1], SIGMA_TRANSITION);
+        mipmapsWidths[i]  = mipmapsWidths[i - 1] / 2;
+        mipmapsHeights[i] = mipmapsHeights[i - 1] / 2;
     }
 
-    for(int i = 0; i < nMipmaps; i++){
-        
-        mipmapsPixelArrays[i] = padImageRGBA(mipmapsPixelArrays[i], mipmapsWidths[i], mipmapsHeights[i], padding, mipmapsWidths[i], mipmapsHeights[i]);
-        mipmaps[i] = createImageFromPixelArray(device, mipmapsPixelArrays[i], mipmapsMemories[i], format, usage, name + " mipmap " + std::to_string(i), mipmapsWidths[i], mipmapsHeights[i]);
+    for (int i = 0; i < nMipmaps; i++) {
+
+        mipmapsPixelArrays[i] =
+        padImageRGBA (mipmapsPixelArrays[i], mipmapsWidths[i], mipmapsHeights[i],
+                      padding, mipmapsWidths[i], mipmapsHeights[i]);
+        mipmaps[i] =
+        createImageFromPixelArray (device, mipmapsPixelArrays[i], mipmapsMemories[i], format,
+                                   usage, name + " mipmap " + std::to_string (i),
+                                   mipmapsWidths[i], mipmapsHeights[i]);
     }
     stbi_image_free (rawPixels);
-
 }
 
 VkImage createImageFromFile (const VulkanDevice& device,
@@ -1190,9 +1163,10 @@ VkImage createImageFromFile (const VulkanDevice& device,
         throw std::runtime_error ("Failed to load texture image!");
     }
     std::vector<uint8_t> rawPixelsArray (rawPixels, rawPixels + 4 * texWidth * texHeight);
-    
-    std::vector<uint8_t>  pixels = padImageRGBA (rawPixelsArray, texWidth, texHeight, padding, texWidth, texHeight);
-    
+
+    std::vector<uint8_t> pixels =
+    padImageRGBA (rawPixelsArray, texWidth, texHeight, padding, texWidth, texHeight);
+
     VkImage textureImage =
     createImageFromPixelArray (device, pixels, imageMemory, format, usage, name,
                                texWidth, texHeight);

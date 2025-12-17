@@ -9,7 +9,7 @@
 #include <array>
 
 // ================= CONFIG =================
-#define N_MIPMAPS 7
+#define N_MIPMAPS 10
 // ==========================================
 
 class VulkanTextureBundle {
@@ -350,8 +350,8 @@ class VulkanTextureBundle {
             return glm::vec2 (0.0f, 0.0f);
         }
         VkExtent3D size = textureSizes[0][textureIndex];
-        return glm::vec2 ((float)(size.width - 2 * ATLAS_PADDING) / (float)atlasSize,
-                          (float)(size.height - 2 * ATLAS_PADDING) / (float)atlasSize);
+        return glm::vec2 ((float)(size.width - ATLAS_PADDING) / (float)atlasSize,
+                          (float)(size.height - ATLAS_PADDING) / (float)atlasSize);
     }
     const VulkanDescriptorData getDescData (int binding, int set) const {
         return { textureDescSet,

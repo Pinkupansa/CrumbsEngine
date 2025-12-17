@@ -70,8 +70,8 @@ int main () {
     // load all texture in the texture folder
     //  go through all files in the textures/ directory
 
-    int grassIndex = renderer.loadTexture ("textures/grass2.jpg");
-    int grassNormalIndex = renderer.loadTexture ("textures/grass2_specular.png");
+    int grassIndex = renderer.loadTexture ("textures/grass3.jpg");
+    int grassNormalIndex = renderer.loadTexture ("textures/grass3_normal.jpg");
     int rockwallTexIndex =
     renderer.loadTexture ("textures/cottage_diffuse.png");
     int brickTexIndex = renderer.loadTexture ("textures/rockwall.jpg");
@@ -90,7 +90,7 @@ int main () {
     sphereObject.transform.rotate ({ 1, 0, 0 }, -1.57);
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
-    Material m2 ({ 1, 1, 1, 1 }, 1, brickTexIndex, grassNormalIndex, { 10, 10 }, true, true);
+    Material m2 ({ 1, 1, 1, 1 }, 1, grassIndex, grassNormalIndex, { 10, 10 }, true, true);
     RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
     floorObject.transform.rotate ({ 1, 0, 0 }, 0);
