@@ -45,6 +45,34 @@ vec2 clampVec(vec2 a, vec2 minVal, vec2 maxVal) {
 vec2 fractVec(vec2 v) {
     return v - floor(v);
 }
+
+vec4 sampleAtlas2(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor, int mip) {
+    vec2 texel = 1.0 / vec2(textureSize(textureAtlas[mip], 0));
+    vec2 inset = 2*texel;
+    vec2 tiledUV = uv * tilingFactor;
+    vec2 subUV = tiledUV - floor(tiledUV);
+    vec2 atlasUV = atlasOffset
+                + inset
+                + subUV * (texSize - 2.0 * inset);
+    return texture(textureAtlas[mip], atlasUV);
+}
+
+vec4 superSampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
+
+    vec2 dUVdx = dFdx(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
+    vec2 dUVdy = dFdy(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
+
+    float rho = max(dot(dUVdx, dUVdx), dot(dUVdy, dUVdy));
+    float lod = 0.5 * log2(rho);
+    lod = clamp(lod, 0.0, 7.0);
+
+    int mip = int(floor(lod));
+
+    vec4 c0 = sampleAtlas2(uv, atlasOffset, texSize, tilingFactor, mip);
+
+    return c0;
+}
+
 vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
     if(atlasOffset.r < 0.0) return vec4(1.0);
     vec2 pixelSize = vec2(
@@ -52,59 +80,30 @@ vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
         length(dFdy(gl_FragCoord.xy))
     );
 
-    vec2 screenResolution = vec2(1920, 1080);
-    // ---------- Derivatives scaled to “screen pixels” ----------
-    vec2 uv_dx = dFdx(uv * tilingFactor) * screenResolution.x;
-    vec2 uv_dy = dFdy(uv * tilingFactor) * screenResolution.y;
+    vec2 dUVdx = dFdx(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
+    vec2 dUVdy = dFdy(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
 
-    vec2 dx_tex = uv_dx * texSize;
-    vec2 dy_tex = uv_dy * texSize;
+    float rho = max(dot(dUVdx, dUVdx), dot(dUVdy, dUVdy));
+    float lod = 0.5 * log2(rho);
+    lod = clamp(lod, 0.0, 7.0);
 
-    float lenX = dot(dx_tex, dx_tex);
-    float lenY = dot(dy_tex, dy_tex);
+    int mip0 = int(floor(lod));
 
-    // ---------- Anisotropic footprint ----------
-    float rho = max(lenX, lenY);
-    rho = max(rho, min(lenX, lenY) * 2.0);
-
-    float mipLevel = 0.5 * log2(rho);        // hardware-style LOD
-    float mip0 = floor(mipLevel);
     float mip1 = mip0 + 1.0;
 
-    const float H = 0.25; 
-    float t = smoothstep(H, 1.0 - H, mipLevel - mip0);
+    const float H = 0.25;
+
+    // stabilize the blend factor
+    float t = smoothstep(H, 1.0 - H, lod - mip0);
 
     int index0 = clamp(int(mip0), 0, 7);
     int index1 = clamp(int(mip1), 0, 7);
 
-    // ---------- Atlas UV ----------
-    vec2 tiledUV = uv * tilingFactor;
-    vec2 subUV = tiledUV - floor(tiledUV);  // derivative-safe wrapping
-    vec2 texel = 1.0 / vec2(textureSize(textureAtlas[index0], 0));
-    vec2 inset = texel * 0.5;
-    vec2 atlasUV = atlasOffset + inset + subUV * (texSize - 2.0 * inset);
+    vec4 color0 = sampleAtlas2(uv, atlasOffset, texSize, tilingFactor, index0);
+    vec4 color1 = sampleAtlas2(uv, atlasOffset, texSize, tilingFactor, index1);
 
-    // ---------- Determine dominant axis ----------
-    vec2 offsetDir = (lenX > lenY) ? normalize(dx_tex) : normalize(dy_tex);
-
-    // Scale for 2-tap offset
-    float offset = 0.5 * length((lenX > lenY) ? dx_tex : dy_tex);
-
-    // Sample two points along dominant axis
-    vec2 atlasUV0 = atlasUV + offsetDir * offset;
-    vec2 atlasUV1 = atlasUV - offsetDir * offset;
-
-    vec4 color0_0 = texture(textureAtlas[index0], atlasUV0);
-    vec4 color0_1 = texture(textureAtlas[index0], atlasUV1);
-    vec4 color1_0 = texture(textureAtlas[index1], atlasUV0);
-    vec4 color1_1 = texture(textureAtlas[index1], atlasUV1);
-
-    // Average the two taps per mip
-    vec4 color0 = 0.5 * (color0_0 + color0_1);
-    vec4 color1 = 0.5 * (color1_0 + color1_1);
-
-    // ---------- Trilinear blend ----------
     vec4 finalColor = mix(color0, color1, t);
+
 
     return finalColor;
 }

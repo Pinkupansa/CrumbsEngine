@@ -1110,7 +1110,7 @@ void createImageAndMipmapsFromFile (const VulkanDevice& device,
     mipmapsWidths.resize (nMipmaps);
     mipmapsHeights.resize (nMipmaps);
 
-    const float SIGMA_TRANSITION = 4; // best results combined with textureLod sampling in the shader
+    const float SIGMA_TRANSITION = 0.71f; // best results combined with textureLod sampling in the shader
     int texChannels;
     stbi_set_flip_vertically_on_load (true);
     stbi_uc* rawPixels = stbi_load (filename.c_str (), &mipmapsWidths[0],
