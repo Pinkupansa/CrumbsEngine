@@ -24,9 +24,9 @@ layout(set = 0, binding = 0) uniform SceneUBO {
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
     vec2 atlasOffset;
-    vec2 textureSize;
+    vec2 relativeTextureSixe;
     vec2 normalmapAtlasOffset;
-    vec2 normalmapTextureSize;
+    vec2 normalmapRelativeTextureSize;
     vec2 tilingFactor;
     bool castsShadows;
     bool isLit;
@@ -42,46 +42,16 @@ float saturate(float x) { return clamp(x, 0.0, 1.0); }
 vec2 clampVec(vec2 a, vec2 minVal, vec2 maxVal) {
     return vec2(clamp(a.x, minVal.x, maxVal.x), clamp(a.y, minVal.y, maxVal.y));
 }
-vec2 fractVec(vec2 v) {
-    return v - floor(v);
-}
 
-vec4 sampleAtlas2(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor, int mip) {
-    vec2 texel = 1.0 / vec2(textureSize(textureAtlas[mip], 0));
-    vec2 inset = 2*texel;
-    vec2 tiledUV = uv * tilingFactor;
-    vec2 subUV = tiledUV - floor(tiledUV);
-    vec2 atlasUV = atlasOffset
-                + inset
-                + subUV * (texSize - 2.0 * inset);
-    return texture(textureAtlas[mip], atlasUV);
-}
-
-vec4 superSampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
-
-    vec2 dUVdx = dFdx(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
-    vec2 dUVdy = dFdy(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
-
-    float rho = max(dot(dUVdx, dUVdx), dot(dUVdy, dUVdy));
-    float lod = 0.5 * log2(rho);
-    lod = clamp(lod, 0.0, 7.0);
-
-    int mip = int(floor(lod));
-
-    vec4 c0 = sampleAtlas2(uv, atlasOffset, texSize, tilingFactor, mip);
-
-    return c0;
-}
-
-vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
+vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilingFactor) {
     if(atlasOffset.r < 0.0) return vec4(1.0);
     vec2 pixelSize = vec2(
         length(dFdx(gl_FragCoord.xy)),
         length(dFdy(gl_FragCoord.xy))
     );
 
-    vec2 dUVdx = dFdx(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
-    vec2 dUVdy = dFdy(uv) * tilingFactor * texSize * textureSize(textureAtlas[0], 0);
+    vec2 dUVdx = dFdx(uv) * tilingFactor * relativeTexSixe * textureSize(textureAtlas[0], 0);
+    vec2 dUVdy = dFdy(uv) * tilingFactor * relativeTexSixe * textureSize(textureAtlas[0], 0);
 
     float rho = max(dot(dUVdx, dUVdx), dot(dUVdy, dUVdy));
     float lod = 0.5 * log2(rho);
@@ -99,8 +69,19 @@ vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
     int index0 = clamp(int(mip0), 0, 7);
     int index1 = clamp(int(mip1), 0, 7);
 
-    vec4 color0 = sampleAtlas2(uv, atlasOffset, texSize, tilingFactor, index0);
-    vec4 color1 = sampleAtlas2(uv, atlasOffset, texSize, tilingFactor, index1);
+    vec2 texel0 = 1.0 / vec2(textureSize(textureAtlas[index0], 0));
+    vec2 texel1 = 1.0 / vec2(textureSize(textureAtlas[index1], 0)); 
+    vec2 inset0 = 2*texel0;
+    vec2 inset1 = 2*texel1;
+    vec2 tiledUV = fract(uv * tilingFactor);
+    vec2 atlasUV0 = atlasOffset
+                + inset0
+                + tiledUV * (relativeTexSixe - 2.0 * inset0);
+    vec2 atlasUV1 = atlasOffset
+                + inset1
+                + tiledUV * (relativeTexSixe - 2.0 * inset1);
+    vec4 color0 = texture(textureAtlas[index0], atlasUV0);
+    vec4 color1 = texture(textureAtlas[index1], atlasUV1);
 
     vec4 finalColor = mix(color0, color1, t);
 
@@ -108,14 +89,14 @@ vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor) {
     return finalColor;
 }
 
-vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 texSize, vec2 tilingFactor, float depth){
-    return sampleAtlas(uv, atlasOffset, texSize, tilingFactor);
+vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilingFactor, float depth){
+    return sampleAtlas(uv, atlasOffset, relativeTexSixe, tilingFactor);
 }
 vec3 computeNormal(){
     if(object.normalmapAtlasOffset.r < 0){
         return vertNormal;
     }
-    vec3 normalMapSample = computeTexColor(fragUV, object.normalmapAtlasOffset, object.normalmapTextureSize, object.tilingFactor, fragCamPos.z).rgb;
+    vec3 normalMapSample = computeTexColor(fragUV, object.normalmapAtlasOffset, object.normalmapRelativeTextureSize, object.tilingFactor, fragCamPos.z).rgb;
 
 
     return normalize(normalMapSample.r*vertTangent + normalMapSample.g * vertBitangent + normalMapSample.b * vertNormal);
@@ -214,7 +195,7 @@ vec3 computeAmbient(vec3 N){
     return mix(scene.groundColor, scene.skyColor, N.y * 0.5 + 0.5)*0.01;
 }
 void main() {
-     vec3 textureColor = computeTexColor(fragUV, object.atlasOffset, object.textureSize, object.tilingFactor, fragCamPos.z).rgb;
+     vec3 textureColor = computeTexColor(fragUV, object.atlasOffset, object.relativeTextureSixe, object.tilingFactor, fragCamPos.z).rgb;
     if(!object.isLit){
         outColor = vec4(textureColor, 1.0f);
         return;
