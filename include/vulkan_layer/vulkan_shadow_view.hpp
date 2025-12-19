@@ -42,7 +42,7 @@ class VulkanShadowView  {
         extent      = { width, height };
         shadowImage = createImage (device, extent, format,
                                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, true,
                                    "Shadow Image");
 
         shadowMemory = allocateAndBindImageMemory (device, shadowImage);

@@ -11,6 +11,7 @@ VkImage createImage (const VulkanDevice& device,
                      VkExtent2D extent,
                      VkFormat format,
                      VkImageUsageFlags imageUsage,
+                     bool isResolve,
                      std::string name) {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -24,7 +25,7 @@ VkImage createImage (const VulkanDevice& device,
     imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage         = imageUsage;
-    imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.samples       = isResolve? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;
     imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
 
     VkImage image;
@@ -36,14 +37,14 @@ VkImage createImage (const VulkanDevice& device,
     return image;
 }
 
-VkImage createColorImage (const VulkanDevice& device, VkExtent2D extent, std::string name) {
+VkImage createColorImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
     return createImage (device, extent, DEFAULT_COLOR_FORMAT,
-                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, name);
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, isResolve, name);
 }
 
-VkImage createDepthImage (const VulkanDevice& device, VkExtent2D extent, std::string name) {
+VkImage createDepthImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
     return createImage (device, extent, DEFAULT_DEPTH_FORMAT,
-                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, name);
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, isResolve, name);
 }
 
 VkImageView createImageView (const VulkanDevice& device,
@@ -161,10 +162,10 @@ VkDeviceMemory allocateAndBindBufferMemory (const VulkanDevice& device,
     return memory;
 }
 
-VkAttachmentDescription createColorAttachment () {
+VkAttachmentDescription createColorAttachment (bool isResolve) {
     VkAttachmentDescription colorAttachment;
     colorAttachment.format  = DEFAULT_COLOR_FORMAT;        // same as swapchain
-    colorAttachment.samples = MSAA_LEVEL;                  // no MSAA for now
+    colorAttachment.samples = isResolve? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;                  // no MSAA for now
     colorAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear at start
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store result for presentation
     colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -197,7 +198,7 @@ VkAttachmentDescription createDepthAttachment () {
 VkAttachmentDescription createShadowDepthAttachment () {
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = DEFAULT_DEPTH_FORMAT; // the same format as your depth image
-    depthAttachment.samples = MSAA_LEVEL;
+    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // depth not presented
     depthAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -873,7 +874,7 @@ std::vector<uint8_t> padImageRGBA (const std::vector<uint8_t>& srcPixels,
         }
     }
     float dt = std::chrono::duration<float> (Clock::now () - time).count ();
-    Debug::LogWarning ("Padding : " + std::to_string (dt));
+
     return out;
 }
 std::vector<glm::vec4> convertU8ToVec4 (const std::vector<uint8_t>& u8Data, bool srgb = false) {
@@ -1020,11 +1021,6 @@ std::vector<glm::vec4> applyVerticalBlurAndDownscale (const std::vector<glm::vec
                 // wrap-around vertically
                 srcY = (srcY + texHeight) % texHeight;
 
-                // Average the 2x2 block horizontally
-                glm::vec4 px = 0.5f *
-                (srcPixels[srcY * texWidth + 2 * x] +
-                 srcPixels[srcY * texWidth + 2 * x + 1]);
-
                 sum += kernel[k + radius] * srcPixels[srcY * texWidth + 2 * x];
             }
 
@@ -1074,7 +1070,7 @@ VkImage createImageFromPixelArray (const VulkanDevice& device,
     // by the caller (for example VK_IMAGE_USAGE_SAMPLED_BIT).
     VkImage textureImage =
     createImage (device, { static_cast<uint32_t> (texWidth), static_cast<uint32_t> (texHeight) },
-                 format, usage, name);
+                 format, usage, true, name);
 
     imageMemory = allocateAndBindImageMemory (device, textureImage);
 
@@ -1216,7 +1212,7 @@ VkImage blitDownsizedImage (const VulkanDevice& device,
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    VkImage dst = createImage (device, dstExtent, format, usage, name);
+    VkImage dst = createImage (device, dstExtent, format, usage, true, name);
 
     imageMemory = allocateAndBindImageMemory (device, dst);
 

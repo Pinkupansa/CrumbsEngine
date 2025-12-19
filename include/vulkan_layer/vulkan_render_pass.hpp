@@ -11,7 +11,7 @@ class VulkanRenderPass {
     std::vector<VkClearValue> clearValues;
 
     public:
-    std::vector<VkClearValue> getClearValues() const {
+    std::vector<VkClearValue> getClearValues () const {
         return clearValues;
     }
     const VkRenderPass& getRenderPass () const {
@@ -20,13 +20,21 @@ class VulkanRenderPass {
 
     VulkanRenderPass (const VulkanDevice& device,
                       std::vector<VkAttachmentDescription> colorAttachments,
-                      std::vector<VkClearValue> colorClearValues,
                       std::vector<VkAttachmentDescription> depthAttachments,
-                      std::vector<VkClearValue> depthClearValues)
+                      std::vector<VkAttachmentDescription> resolveAttachments)
     : pDevice (device) {
         int attachmentCount = 0;
-        clearValues = colorClearValues; 
-        clearValues.insert(clearValues.end(), depthClearValues.begin(), depthClearValues.end());
+        
+        for(int i = 0; i < colorAttachments.size(); i++){
+            clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
+        }
+
+        for(int i = 0; i < depthAttachments.size(); i++){
+            clearValues.push_back(createDepthClearValue({1.0f, 0}));
+        }
+        for(int i = 0; i < resolveAttachments.size(); i++){
+            clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
+        }
         std::vector<VkAttachmentReference> colorAttachmentsRefs;
         for (VkAttachmentDescription cAtt : colorAttachments) {
             colorAttachmentsRefs.push_back (createColorAttachmentRef (attachmentCount));
@@ -39,16 +47,23 @@ class VulkanRenderPass {
             attachmentCount++;
         }
 
-
+        std::vector<VkAttachmentReference> resolveAttachmentsRefs;
+        for (VkAttachmentDescription rAtt : depthAttachments) {
+            resolveAttachmentsRefs.push_back (createColorAttachmentRef (attachmentCount));
+            attachmentCount++;
+        }
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount    = colorAttachmentsRefs.size ();
         subpass.pColorAttachments       = colorAttachmentsRefs.data ();
         subpass.pDepthStencilAttachment = depthAttachmentsRefs.data ();
+        subpass.pResolveAttachments     = resolveAttachmentsRefs.data ();
 
         std::vector<VkAttachmentDescription> attachments = colorAttachments;
         attachments.insert (attachments.end (), depthAttachments.begin (),
                             depthAttachments.end ());
+        attachments.insert (attachments.end (), resolveAttachments.begin (),
+                            resolveAttachments.end ());
 
         VkRenderPassCreateInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;

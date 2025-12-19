@@ -43,7 +43,7 @@ vec2 clampVec(vec2 a, vec2 minVal, vec2 maxVal) {
     return vec2(clamp(a.x, minVal.x, maxVal.x), clamp(a.y, minVal.y, maxVal.y));
 }
 
-vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilingFactor) {
+vec4 sampleAtlasAA(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilingFactor) {
     if(atlasOffset.r < 0.0) return vec4(1.0);
     vec2 pixelSize = vec2(
         length(dFdx(gl_FragCoord.xy)),
@@ -90,7 +90,7 @@ vec4 sampleAtlas(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilingFac
 }
 
 vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilingFactor, float depth){
-    return sampleAtlas(uv, atlasOffset, relativeTexSixe, tilingFactor);
+    return sampleAtlasAA(uv, atlasOffset, relativeTexSixe, tilingFactor);
 }
 vec3 computeNormal(){
     if(object.normalmapAtlasOffset.r < 0){

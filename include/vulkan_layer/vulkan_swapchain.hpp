@@ -12,6 +12,10 @@ class VulkanSwapchain {
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
 
+    std::vector<VkImage> msaaColorImages;
+    std::vector<VkDeviceMemory> msaaColorMemories;
+    std::vector<VkImageView> msaaColorImageViews;
+
     VkImage depthImage;
     VkImageView depthImageView;
     VkDeviceMemory depthMemory;
@@ -30,9 +34,9 @@ class VulkanSwapchain {
     }
 
     std::vector<std::vector<VkImageView>> getAttachmentsPerFramebuffer () {
-        return { { getImageViews ()[0], getDepthView () },
-                 { getImageViews ()[1], getDepthView () },
-                 { getImageViews ()[2], getDepthView () } };
+        return { { msaaColorImageViews[0], getDepthView (), getImageViews ()[0]},
+                 { msaaColorImageViews[1], getDepthView (), getImageViews ()[1]},
+                 { msaaColorImageViews[2], getDepthView (), getImageViews ()[2]}};
     }
     VulkanSwapchain (VulkanDevice& device, VulkanSurface& surface)
     : pDevice (device) {
@@ -50,6 +54,16 @@ class VulkanSwapchain {
         vkGetSwapchainImagesKHR (device.getDevice (), swapchain, &imageCount,
                                  swapchainImages.data ());
 
+
+        msaaColorImages.resize(swapchainImages.size());
+        msaaColorMemories.resize(swapchainImages.size());
+        msaaColorImageViews.resize(swapchainImages.size());
+        for(int i = 0; i < swapchainImages.size(); i++){
+            msaaColorImages[i] = createImage(device, surface.getCapabilities().currentExtent, DEFAULT_COLOR_FORMAT, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, false, "MSAA Color " + std::to_string(i));
+            msaaColorMemories[i] = allocateAndBindImageMemory(device, msaaColorImages[i]);
+            msaaColorImageViews[i] = createColorImageView(device, msaaColorImages[i], "MSAA Color Image View " + std::to_string(i));
+        }
         // 2. Create image views
         swapchainImageViews.resize (imageCount);
         for (int i = 0; i < imageCount; i++) {
@@ -59,7 +73,7 @@ class VulkanSwapchain {
         }
 
         // 3. Depth buffer
-        depthImage  = createDepthImage (device, surface.getCapabilities().currentExtent, "Main Depth Image");
+        depthImage  = createDepthImage (device, surface.getCapabilities().currentExtent, false, "Main Depth Image");
         depthMemory = allocateAndBindImageMemory (device, depthImage);
         depthImageView = createDepthImageView (device, depthImage, "Depth Buffer Main");
     }
@@ -107,8 +121,23 @@ class VulkanSwapchain {
                 vkDestroyImageView (pDevice.getDevice (), swapchainImageViews[i], nullptr);
                 swapchainImageViews[i] = VK_NULL_HANDLE;
             }
+            if(msaaColorImages[i] != VK_NULL_HANDLE){
+                vkDestroyImage(pDevice.getDevice(), msaaColorImages[i], nullptr); 
+                msaaColorImages[i] = VK_NULL_HANDLE;
+            }
+            if(msaaColorImageViews[i] != VK_NULL_HANDLE){
+                vkDestroyImageView(pDevice.getDevice(), msaaColorImageViews[i], nullptr); 
+                msaaColorImageViews[i] = VK_NULL_HANDLE;
+            }
+            if(msaaColorMemories[i] != VK_NULL_HANDLE){
+                vkFreeMemory(pDevice.getDevice(), msaaColorMemories[i], nullptr);
+                msaaColorMemories[i] = VK_NULL_HANDLE;
+            }
         }
         swapchainImageViews.clear ();
+        msaaColorImages.clear();
+        msaaColorImageViews.clear();
+        msaaColorMemories.clear();
 
         if (depthImageView != VK_NULL_HANDLE) {
             vkDestroyImageView (pDevice.getDevice (), depthImageView, nullptr);
@@ -127,5 +156,7 @@ class VulkanSwapchain {
             vkDestroySwapchainKHR (pDevice.getDevice (), swapchain, nullptr);
             swapchain = VK_NULL_HANDLE;
         }
+
+        
     }
 };

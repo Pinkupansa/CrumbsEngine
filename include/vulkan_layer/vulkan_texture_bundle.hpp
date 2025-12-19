@@ -57,7 +57,7 @@ class VulkanTextureBundle {
 
             atlasImages[mip] =
             createImage (device, { mipAtlasSize, mipAtlasSize }, DEFAULT_TEXTURE_COLOR_FORMAT,
-                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true,
                          "Texture Atlas Image Mip " + std::to_string (mip));
 
             atlasImageMemories[mip] =
@@ -99,14 +99,23 @@ class VulkanTextureBundle {
             textureAtlasCoords[mip].clear ();
             textureSizes[mip].clear ();
 
-            if (atlasSamplers[mip] != VK_NULL_HANDLE)
+            if (atlasSamplers[mip] != VK_NULL_HANDLE){
                 vkDestroySampler (device.getDevice (), atlasSamplers[mip], nullptr);
-            if (atlasImageViews[mip] != VK_NULL_HANDLE)
+                atlasSamplers[mip] = VK_NULL_HANDLE;
+            }
+            if (atlasImageViews[mip] != VK_NULL_HANDLE){
                 vkDestroyImageView (device.getDevice (), atlasImageViews[mip], nullptr);
-            if (atlasImages[mip] != VK_NULL_HANDLE)
+                atlasImageViews[mip] = VK_NULL_HANDLE;
+            }
+            if (atlasImages[mip] != VK_NULL_HANDLE){
                 vkDestroyImage (device.getDevice (), atlasImages[mip], nullptr);
-            if (atlasImageMemories[mip] != VK_NULL_HANDLE)
+
+                atlasImages[mip] = VK_NULL_HANDLE;
+            }
+            if (atlasImageMemories[mip] != VK_NULL_HANDLE){
                 vkFreeMemory (device.getDevice (), atlasImageMemories[mip], nullptr);
+                atlasImageMemories[mip] = VK_NULL_HANDLE;
+            }
         }
 
         if (textureDescLayout != VK_NULL_HANDLE)
@@ -117,6 +126,7 @@ class VulkanTextureBundle {
         textureDescLayout = VK_NULL_HANDLE;
         textureDescPool   = VK_NULL_HANDLE;
         textureDescSet    = VK_NULL_HANDLE;
+        
     }
 
     VkExtent3D roundMaxDimToPowerOfTwo (VkExtent3D srcTexSize) {
@@ -226,11 +236,6 @@ class VulkanTextureBundle {
             VkOffset3D atlasOffset = {(int)(offset.x/pow(2, mip)), (int)(offset.y/pow(2, mip)), 0};
             copyImage (device, textureImages[mip][textureIndex], atlasImages[mip],
                     textureSizes[mip][textureIndex], atlasOffset);
-            Debug::Log ("Pasted texture " + std::to_string (textureIndex) +
-                        " at atlas offset (" + std::to_string (atlasOffset.x) +
-                        ", " + std::to_string (atlasOffset.y) + ")" + "with size (" +
-                        std::to_string (textureSizes[mip][textureIndex].width) + ", " +
-                        std::to_string (textureSizes[mip][textureIndex].height) + ")");
             textureAtlasCoords[mip][textureIndex] = atlasOffset;
         }
         
@@ -249,9 +254,8 @@ class VulkanTextureBundle {
                    int& endPower,
                    int& endIndex) {
         
-     
+    
         while (startPower >= 0 && textureIndicesPerPowersOfTwo[startPower].size () == 0) {
-
             startPower--;
             startIndex = 0;
         }
@@ -328,7 +332,7 @@ class VulkanTextureBundle {
             }
         }
         int endP, endI;
-        fillCell ({ 0, 0, 0 }, ceiledLog2 (atlasSize)-1, textureIndicesPerPowersOfTwo,
+        fillCell ({ 0, 0, 0 }, ceiledLog2 (atlasSize), textureIndicesPerPowersOfTwo,
                   ceiledLog2 (atlasSize) - 1, 0, endP, endI);
         for (uint32_t mip = 0; mip < N_MIPMAPS; ++mip) {
             writeImageSamplerInDescriptorSetArray (device, atlasImageViews[mip],
