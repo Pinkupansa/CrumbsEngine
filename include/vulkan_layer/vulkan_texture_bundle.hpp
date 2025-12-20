@@ -57,8 +57,8 @@ class VulkanTextureBundle {
 
             atlasImages[mip] =
             createImage (device, { mipAtlasSize, mipAtlasSize }, DEFAULT_TEXTURE_COLOR_FORMAT,
-                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true,
-                         "Texture Atlas Image Mip " + std::to_string (mip));
+                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                         true, "Texture Atlas Image Mip " + std::to_string (mip));
 
             atlasImageMemories[mip] =
             allocateAndBindImageMemory (device, atlasImages[mip]);
@@ -99,20 +99,20 @@ class VulkanTextureBundle {
             textureAtlasCoords[mip].clear ();
             textureSizes[mip].clear ();
 
-            if (atlasSamplers[mip] != VK_NULL_HANDLE){
+            if (atlasSamplers[mip] != VK_NULL_HANDLE) {
                 vkDestroySampler (device.getDevice (), atlasSamplers[mip], nullptr);
                 atlasSamplers[mip] = VK_NULL_HANDLE;
             }
-            if (atlasImageViews[mip] != VK_NULL_HANDLE){
+            if (atlasImageViews[mip] != VK_NULL_HANDLE) {
                 vkDestroyImageView (device.getDevice (), atlasImageViews[mip], nullptr);
                 atlasImageViews[mip] = VK_NULL_HANDLE;
             }
-            if (atlasImages[mip] != VK_NULL_HANDLE){
+            if (atlasImages[mip] != VK_NULL_HANDLE) {
                 vkDestroyImage (device.getDevice (), atlasImages[mip], nullptr);
 
                 atlasImages[mip] = VK_NULL_HANDLE;
             }
-            if (atlasImageMemories[mip] != VK_NULL_HANDLE){
+            if (atlasImageMemories[mip] != VK_NULL_HANDLE) {
                 vkFreeMemory (device.getDevice (), atlasImageMemories[mip], nullptr);
                 atlasImageMemories[mip] = VK_NULL_HANDLE;
             }
@@ -126,15 +126,16 @@ class VulkanTextureBundle {
         textureDescLayout = VK_NULL_HANDLE;
         textureDescPool   = VK_NULL_HANDLE;
         textureDescSet    = VK_NULL_HANDLE;
-        
     }
 
     VkExtent3D roundMaxDimToPowerOfTwo (VkExtent3D srcTexSize) {
         VkExtent3D texSize = srcTexSize;
         if (texSize.width >= texSize.height) {
-  
-            if (texSize.width != 1 << ceiledLog2 (texSize.width)){
-                texSize.height = (int)(texSize.height * 1 << (ceiledLog2 (texSize.width) - 1)) / (float)texSize.width;
+
+            if (texSize.width != 1 << ceiledLog2 (texSize.width)) {
+                texSize.height =
+                (int)(texSize.height * 1 << (ceiledLog2 (texSize.width) - 1)) /
+                (float)texSize.width;
                 texSize.width = 1 << (ceiledLog2 (texSize.width) - 1);
             }
         }
@@ -154,91 +155,67 @@ class VulkanTextureBundle {
     // Texture loading: creates N_MIPMAPS textures per input
     // ------------------------------------------------------------
     uint32_t addTexture (const std::string& filename) {
-    uint32_t index = textureImages[0].size ();
+        uint32_t index = textureImages[0].size ();
 
-    std::vector<VkImage>        mipImages;
-    std::vector<VkDeviceMemory> mipMemories;
-    std::vector<int>            mipWidths;
-    std::vector<int>            mipHeights;
+        std::vector<VkImage> mipImages;
+        std::vector<VkDeviceMemory> mipMemories;
+        std::vector<int> mipWidths;
+        std::vector<int> mipHeights;
 
-    // 1. Load image + generate mipmaps (original resolution)
-    createImageAndMipmapsFromFile(
-        device,
-        filename,
-        DEFAULT_TEXTURE_COLOR_FORMAT,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-        VK_IMAGE_USAGE_SAMPLED_BIT,
-        mipImages,
-        mipMemories,
-        N_MIPMAPS,
-        "Texture " + std::to_string(index),
-        mipWidths,
-        mipHeights,
-        ATLAS_PADDING
-    );
+        // 1. Load image + generate mipmaps (original resolution)
+        createImageAndMipmapsFromFile (device, filename, DEFAULT_TEXTURE_COLOR_FORMAT,
+                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                       mipImages, mipMemories, N_MIPMAPS,
+                                       "Texture " + std::to_string (index),
+                                       mipWidths, mipHeights, ATLAS_PADDING);
 
-    // 2. For each mip, downscale to nearest power-of-two
-    for (uint32_t mip = 0; mip < N_MIPMAPS; ++mip) {
-        VkExtent3D srcSize {
-            (uint32_t)mipWidths[mip],
-            (uint32_t)mipHeights[mip],
-            1
-        };
+        // 2. For each mip, downscale to nearest power-of-two
+        for (uint32_t mip = 0; mip < N_MIPMAPS; ++mip) {
+            VkExtent3D srcSize{ (uint32_t)mipWidths[mip], (uint32_t)mipHeights[mip], 1 };
 
-        VkExtent3D dstSize = roundMaxDimToPowerOfTwo(srcSize);
+            VkExtent3D dstSize = roundMaxDimToPowerOfTwo (srcSize);
 
-        VkDeviceMemory downsizedMemory;
-        VkImage downsizedImage = blitDownsizedImage(
-            device,
-            mipImages[mip],
-            DEFAULT_TEXTURE_COLOR_FORMAT,
-            srcSize.width,
-            srcSize.height,
-            dstSize.width,
-            dstSize.height,
-            downsizedMemory,
-            ("Texture " + std::to_string(index) +
-             " mip " + std::to_string(mip) + " POT").c_str()
-        );
+            VkDeviceMemory downsizedMemory;
+            VkImage downsizedImage =
+            blitDownsizedImage (device, mipImages[mip], DEFAULT_TEXTURE_COLOR_FORMAT,
+                                srcSize.width, srcSize.height, dstSize.width,
+                                dstSize.height, downsizedMemory,
+                                ("Texture " + std::to_string (index) + " mip " +
+                                 std::to_string (mip) + " POT")
+                                .c_str ());
 
-        // Store only the downsized image
-        textureImages[mip].push_back(downsizedImage);
-        textureImageMemories[mip].push_back(downsizedMemory);
-        textureImageViews[mip].push_back(
-            createImageView(
-                device,
-                downsizedImage,
-                DEFAULT_TEXTURE_COLOR_FORMAT,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                "Texture View mip " + std::to_string(mip)
-            )
-        );
-        textureSizes[mip].push_back(dstSize);
-        textureAtlasCoords[mip].push_back({0,0,0});
+            // Store only the downsized image
+            textureImages[mip].push_back (downsizedImage);
+            textureImageMemories[mip].push_back (downsizedMemory);
+            textureImageViews[mip].push_back (
+            createImageView (device, downsizedImage, DEFAULT_TEXTURE_COLOR_FORMAT, VK_IMAGE_ASPECT_COLOR_BIT,
+                             "Texture View mip " + std::to_string (mip)));
+            textureSizes[mip].push_back (dstSize);
+            textureAtlasCoords[mip].push_back ({ 0, 0, 0 });
 
-        // Cleanup original mip image
-        vkDestroyImage(device.getDevice(), mipImages[mip], nullptr);
-        vkFreeMemory(device.getDevice(), mipMemories[mip], nullptr);
+            // Cleanup original mip image
+            vkDestroyImage (device.getDevice (), mipImages[mip], nullptr);
+            vkFreeMemory (device.getDevice (), mipMemories[mip], nullptr);
+        }
+
+        return index;
     }
 
-    return index;
-}
 
-    
     void pasteTextureOnAtlas (uint32_t textureIndex, VkOffset3D offset) {
-        
+
         if (textureIndex >= textureImages[0].size ()) {
             return;
         }
-       
-        for(int mip = 0; mip < N_MIPMAPS; mip++){
-            VkOffset3D atlasOffset = {(int)(offset.x/pow(2, mip)), (int)(offset.y/pow(2, mip)), 0};
+
+        for (int mip = 0; mip < N_MIPMAPS; mip++) {
+            VkOffset3D atlasOffset = { (int)(offset.x / pow (2, mip)),
+                                       (int)(offset.y / pow (2, mip)), 0 };
             copyImage (device, textureImages[mip][textureIndex], atlasImages[mip],
-                    textureSizes[mip][textureIndex], atlasOffset);
+                       textureSizes[mip][textureIndex], atlasOffset);
             textureAtlasCoords[mip][textureIndex] = atlasOffset;
         }
-        
     }
 
     bool isEndOfTextures (int power, int index, const std::vector<std::vector<int>>& textureIndicesPerPowersOfTwo) {
@@ -253,8 +230,8 @@ class VulkanTextureBundle {
                    int startIndex,
                    int& endPower,
                    int& endIndex) {
-        
-    
+
+
         while (startPower >= 0 && textureIndicesPerPowersOfTwo[startPower].size () == 0) {
             startPower--;
             startIndex = 0;
@@ -316,7 +293,7 @@ class VulkanTextureBundle {
     }
     void buildTextureAtlas () {
 
-        for(int i = 0; i < N_MIPMAPS; i++){
+        for (int i = 0; i < N_MIPMAPS; i++) {
             textureAtlasCoords[i].resize (textureImages[i].size ());
         }
         std::vector<std::vector<int>> textureIndicesPerPowersOfTwo (
@@ -371,5 +348,4 @@ class VulkanTextureBundle {
     int ceiledLog2 (int v) const {
         return (int)std::ceil (std::log2 ((float)v));
     }
-
 };

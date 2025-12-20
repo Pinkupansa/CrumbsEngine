@@ -162,11 +162,11 @@ VkDeviceMemory allocateAndBindBufferMemory (const VulkanDevice& device,
     return memory;
 }
 
-VkAttachmentDescription createColorAttachment (bool isResolve) {
+VkAttachmentDescription createColorAttachment (bool isResolve, VkAttachmentLoadOp loadOp){
     VkAttachmentDescription colorAttachment;
     colorAttachment.format  = DEFAULT_COLOR_FORMAT;        // same as swapchain
     colorAttachment.samples = isResolve? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;                  // no MSAA for now
-    colorAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear at start
+    colorAttachment.loadOp  = loadOp; // clear at start
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store result for presentation
     colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -183,12 +183,12 @@ VkAttachmentReference createColorAttachmentRef (int attachmentNumber) {
     return colorAttachmentRef;
 }
 
-VkAttachmentDescription createDepthAttachment () {
+VkAttachmentDescription createDepthAttachment (VkAttachmentLoadOp loadOp) {
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = DEFAULT_DEPTH_FORMAT; // the same format as your depth image
     depthAttachment.samples = MSAA_LEVEL;
-    depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // depth not presented
+    depthAttachment.loadOp  = loadOp;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // depth not presented
     depthAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -496,11 +496,11 @@ VkPipelineRasterizationStateCreateInfo createDefaultRasterizerInfo (VkCullModeFl
     return rasterizer;
 }
 
-VkPipelineMultisampleStateCreateInfo createDefaultMSAAInfo () {
+VkPipelineMultisampleStateCreateInfo createMSAAInfo (bool hasResolve) {
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable  = VK_FALSE;
-    multisampling.rasterizationSamples = MSAA_LEVEL;
+    multisampling.rasterizationSamples = hasResolve? MSAA_LEVEL: VK_SAMPLE_COUNT_1_BIT;
     return multisampling;
 }
 

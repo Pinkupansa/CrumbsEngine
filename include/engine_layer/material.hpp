@@ -6,6 +6,7 @@
 // can be converted to vulkan level descriptor set later
 
 struct Material {
+    int shaderIndex;
     glm::vec4 tint;
     float specularIntensity;
     // texture
@@ -15,17 +16,18 @@ struct Material {
     bool isLit;
     bool castsShadows;
 
-    Material (glm::vec4 tint,
+    Material (int shaderIndex,
+              glm::vec4 tint,
               float specularIntensity,
               int textureImageIndex,
               int normalMapIndex,
               glm::vec2 tilingFactor,
               bool castsShadows,
               bool isLit)
-    : tint (tint), specularIntensity (specularIntensity),
+    : shaderIndex(shaderIndex), tint (tint), specularIntensity (specularIntensity),
       textureImageIndex (textureImageIndex), normalMapIndex (normalMapIndex),
       tilingFactor (tilingFactor), castsShadows(castsShadows), isLit(isLit) {
     }
 };
 
-static const Material DEFAULT_MATERIAL = { glm::vec4 (1.0f), 1.0f, -1, -1, { 1, 1 } , true, true};
+static const Material DEFAULT_MATERIAL = {0, glm::vec4 (1.0f), 1.0f, -1, -1, { 1, 1 } , true, true};

@@ -244,5 +244,5 @@ void main() {
     vec3 lighting = (diffuse*textureColor + specular) * shadow * scene.lightColor + computeAmbient(N);
     //vec3 lighting = textureColor;
     //vec3 lighting = vec3(shadow, shadow, shadow);
-    outColor = vec4(lighting, 1.0);
+    outColor = vec4(1.0, 1.0, 1.0, 1.0);
 }

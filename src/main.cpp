@@ -15,7 +15,8 @@ void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
     }
 
 
-    renderer.addMeshDrawCall (crumb.renderData.value ().meshIndex,
+    renderer.addMeshDrawCall (crumb.renderData.value().material.shaderIndex,
+                              crumb.renderData.value ().meshIndex,
                               crumb.transform.getModelMatrix (),
                               crumb.renderData.value ().material.textureImageIndex,
                               crumb.renderData.value ().material.normalMapIndex,
@@ -64,6 +65,10 @@ int main () {
                 glm::vec3 (10.0f));
 
 
+    Mesh dragon = importMesh("dragon.fbx");
+    uint32_t dragonIndex = renderer.loadMesh(dragon);
+
+
     float elapsedTime = 0;
     auto lastTime     = Clock::now ();
 
@@ -79,10 +84,15 @@ int main () {
     renderer.loadTexture ("textures/cottage_normal.png");
 
     int skyboxTexture = renderer.loadTexture("textures/sky2.jpg");
+    int dragonTexture = renderer.loadTexture("textures/Dragon_ground_color.jpg");
     renderer.buildTextureAtlas ();
 
+   
+    int testShaderInd = renderer.loadShader("shaders/test.frag.spv", VK_COMPARE_OP_LESS);
+    int testShader2Ind = renderer.loadShader("shaders/test2.frag.spv", VK_COMPARE_OP_LESS);
 
-    Material m ({ 1, 1, 1, 1 }, 1, rockwallTexIndex, stonewallNormalMapIndex,
+
+    Material m (testShaderInd, { 1, 1, 1, 1 }, 1, rockwallTexIndex, stonewallNormalMapIndex,
                 { 1, 1 }, true, true);
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
@@ -90,7 +100,7 @@ int main () {
     sphereObject.transform.rotate ({ 1, 0, 0 }, -1.57);
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
-    Material m2 ({ 1, 1, 1, 1 }, 1, grassIndex, grassNormalIndex, { 10, 10 }, true, true);
+    Material m2 (testShader2Ind, { 1, 1, 1, 1 }, 1, grassIndex, grassNormalIndex, { 10, 10 }, true, true);
     RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
     floorObject.transform.rotate ({ 1, 0, 0 }, 0);
@@ -100,15 +110,26 @@ int main () {
 
     Mesh skybox     = generateInvertedSphere ();
     int skyboxIndex = renderer.loadMesh (skybox);
-    Material m3 ({ 1, 1, 1, 1 }, 1, skyboxTexture, -1, { 1, 1 }, false, false);
+    Material m3 (testShaderInd, { 1, 1, 1, 1 }, 1, skyboxTexture, -1, { 1, 1 }, false, false);
     RenderData skyRenderData (skyboxIndex, m3);
     Crumb skyboxObject (skyRenderData);
     skyboxObject.transform.scaleByFactor (glm::vec3 (100.0f));
     skyboxObject.transform.rotate({1, 0, 0}, 3.14);
+
+    Material mDragon (testShaderInd, {1, 1, 1, 1}, 1, dragonTexture, -1, {1, 1}, true, true);
+    RenderData dragonRenderData(dragonIndex, mDragon);
+    Crumb dragonObject (dragonRenderData); 
+    dragonObject.transform.position = {0, 2, 0};    
+    dragonObject.transform.scaleByFactor(glm::vec3(0.2f));
+    dragonObject.transform.rotate({1,0,0}, 1.57);
+    dragonObject.transform.rotate({0,1,0}, 3.14); 
+    dragonObject.transform.rotate({0,0,1}, 3.14); 
+
     Scene scene;
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
-    scene.addCrumb (skyboxObject);
+   // scene.addCrumb (skyboxObject);
+    scene.addCrumb(dragonObject);
     Camera cam ({ 0, 0, 0 }, { 0, 0, 1 });
     scene.setCamera (cam);
 

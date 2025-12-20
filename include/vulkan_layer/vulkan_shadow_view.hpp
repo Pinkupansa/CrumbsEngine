@@ -1,10 +1,10 @@
 #pragma once
+#include "vulkan_descriptor_data.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_object_creation_utils.hpp"
 #include <vector>
 #include <vulkan/vulkan.h>
-#include "vulkan_descriptor_data.hpp"
-class VulkanShadowView  {
+class VulkanShadowView {
     private:
     VulkanDevice& pDevice;
     VkImage shadowImage;
@@ -15,9 +15,10 @@ class VulkanShadowView  {
     VkDescriptorSetLayout shadowDescLayout;
     VkDescriptorPool shadowDescPool;
     VkDescriptorSet shadowDescSet;
+    VulkanSyncObjects syncObjects;
 
     public:
-    VkImage getShadowImage(){
+    VkImage getShadowImage () {
         return shadowImage;
     }
     std::vector<std::vector<VkImageView>> getAttachmentsPerImage () {
@@ -27,8 +28,14 @@ class VulkanShadowView  {
         return extent;
     }
 
-    const VulkanDescriptorData getDescData(int binding, int set) const{
-        return {shadowDescSet, shadowDescLayout, shadowDescPool, false, 0, binding, set};
+    const VulkanDescriptorData getDescData (int binding, int set) const {
+        return { shadowDescSet,
+                 shadowDescLayout,
+                 shadowDescPool,
+                 false,
+                 0,
+                 binding,
+                 set };
     }
 
     const VkDescriptorSet& getDescSet () const {
@@ -38,12 +45,12 @@ class VulkanShadowView  {
         return shadowDescLayout;
     }
     VulkanShadowView (VulkanDevice& device, uint width, uint height, VkFormat format)
-    : pDevice (device) {
+    : pDevice (device), syncObjects (device, 1, "Shadow Sync ") {
         extent      = { width, height };
         shadowImage = createImage (device, extent, format,
                                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, true,
-                                   "Shadow Image");
+                                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                   true, "Shadow Image");
 
         shadowMemory = allocateAndBindImageMemory (device, shadowImage);
 
@@ -70,15 +77,21 @@ class VulkanShadowView  {
         destroy ();
     }
 
-    void drawWithDrawer (VulkanImageDrawer& imageDrawer,
-                                 const VulkanBuffer& vertexBuffer,
-                                 const VulkanBuffer& indexBuffer,
-                                 const std::vector<MeshDrawInfo>& meshPool,
-                                 const std::vector<uint32_t>& drawCallMeshIndices){
-                                
-                                imageDrawer.waitAndReset();
-                                imageDrawer.draw(vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices, 0, 0, 0);
+    void waitAndResetFences () const {
+        vkWaitForFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[0],
+                         VK_TRUE, UINT64_MAX);
+        vkResetFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[0]);
+    }
 
+    void drawWithDrawer (VulkanImageDrawer& imageDrawer,
+                         const VulkanBuffer& vertexBuffer,
+                         const VulkanBuffer& indexBuffer,
+                         const std::vector<MeshDrawInfo>& meshPool,
+                         const std::vector<uint32_t>& drawCallMeshIndices) {
+
+        waitAndResetFences ();
+        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool,
+                          drawCallMeshIndices, syncObjects, false, false, true, 0, 0);
     }
     void destroy () {
         if (shadowDescLayout != VK_NULL_HANDLE) {

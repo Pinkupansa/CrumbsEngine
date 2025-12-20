@@ -14,7 +14,7 @@ public:
     std::vector<VkSemaphore> renderFinishedSemaphore;
     std::vector<VkFence> inFlightFence;
 
-    VulkanSyncObjects(const VulkanDevice &device, int imageCount) : pDevice(device) {
+    VulkanSyncObjects(const VulkanDevice &device, int imageCount, std::string name = "Swapchain Sync ") : pDevice(device) {
         imageAvailableSemaphore.resize(imageCount);
         renderFinishedSemaphore.resize(imageCount);
         inFlightFence.resize(imageCount);
@@ -32,6 +32,10 @@ public:
                 vkCreateFence(device.getDevice(), &fenceInfo, nullptr, &inFlightFence[i]) != VK_SUCCESS) {
                 throw std::runtime_error("Failed to create synchronization objects!");
             }
+
+            device.nameObject((uint64_t)imageAvailableSemaphore[i], VK_OBJECT_TYPE_SEMAPHORE, name + " Image Available " + std::to_string(i));
+            device.nameObject((uint64_t)renderFinishedSemaphore[i], VK_OBJECT_TYPE_SEMAPHORE, name + " Render Finished " + std::to_string(i));
+            device.nameObject((uint64_t)inFlightFence[i], VK_OBJECT_TYPE_FENCE, name + " In Flight " + std::to_string(i));
         }
     }
 

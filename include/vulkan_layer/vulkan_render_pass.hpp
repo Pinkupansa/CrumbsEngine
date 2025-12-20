@@ -9,7 +9,7 @@ class VulkanRenderPass {
     VkRenderPass renderPass;
 
     std::vector<VkClearValue> clearValues;
-
+    bool hasResolve;
     public:
     std::vector<VkClearValue> getClearValues () const {
         return clearValues;
@@ -18,13 +18,16 @@ class VulkanRenderPass {
         return renderPass;
     }
 
+    const bool hasResolveAttachment() const{ //used to set nRasterizationSamples in pipeline
+        return hasResolve;
+    }
     VulkanRenderPass (const VulkanDevice& device,
                       std::vector<VkAttachmentDescription> colorAttachments,
                       std::vector<VkAttachmentDescription> depthAttachments,
                       std::vector<VkAttachmentDescription> resolveAttachments)
     : pDevice (device) {
         int attachmentCount = 0;
-        
+        hasResolve = resolveAttachments.size() > 0;
         for(int i = 0; i < colorAttachments.size(); i++){
             clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
         }

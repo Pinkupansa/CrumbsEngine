@@ -16,9 +16,14 @@ class VulkanSwapchain {
     std::vector<VkDeviceMemory> msaaColorMemories;
     std::vector<VkImageView> msaaColorImageViews;
 
+    VulkanSyncObjects syncObjects; 
+
     VkImage depthImage;
     VkImageView depthImageView;
     VkDeviceMemory depthMemory;
+
+    uint32_t currentFrame;
+    int currentSyncIndex;
 
     public:
     const VkSwapchainKHR& getSwapchain () const {
@@ -33,13 +38,13 @@ class VulkanSwapchain {
         return depthImageView;
     }
 
-    std::vector<std::vector<VkImageView>> getAttachmentsPerFramebuffer () {
+    std::vector<std::vector<VkImageView>> getAttachmentsPerImage () {
         return { { msaaColorImageViews[0], getDepthView (), getImageViews ()[0]},
                  { msaaColorImageViews[1], getDepthView (), getImageViews ()[1]},
                  { msaaColorImageViews[2], getDepthView (), getImageViews ()[2]}};
     }
     VulkanSwapchain (VulkanDevice& device, VulkanSurface& surface)
-    : pDevice (device) {
+    : pDevice (device), syncObjects(device, 3) {
 
         swapchain = createTripleBufferingSwapchain (device, surface, "Main Swapchain");
 
@@ -76,40 +81,48 @@ class VulkanSwapchain {
         depthImage  = createDepthImage (device, surface.getCapabilities().currentExtent, false, "Main Depth Image");
         depthMemory = allocateAndBindImageMemory (device, depthImage);
         depthImageView = createDepthImageView (device, depthImage, "Depth Buffer Main");
+
+        currentFrame = 0;
+        currentSyncIndex = 0;
     }
 
-    void present (const VkSemaphore& renderFinishedSemaphore, uint32_t imageIndex) {
+
+    
+
+    void present () {
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores    = &renderFinishedSemaphore;
+        presentInfo.pWaitSemaphores    = &syncObjects.renderFinishedSemaphore[currentSyncIndex];
         presentInfo.swapchainCount     = 1;
         presentInfo.pSwapchains        = &swapchain;
-        presentInfo.pImageIndices      = &imageIndex;
+        presentInfo.pImageIndices      = &currentFrame;
         vkQueuePresentKHR (pDevice.getGraphicsQueue (), &presentInfo);
+
+        currentSyncIndex = (currentSyncIndex + 1) % 3;
+        
+        
     }
 
-    uint32_t acquireNextImageIndex (const VkSemaphore& imageAvailableSemaphore) {
-        uint32_t imageIndex;
+    void updateFrameIndex () {
         vkAcquireNextImageKHR (pDevice.getDevice (), swapchain, UINT64_MAX,
-                               imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
-        return imageIndex;
+                               syncObjects.imageAvailableSemaphore[currentSyncIndex], VK_NULL_HANDLE, &currentFrame);
+    }
+
+    void waitAndResetFences () const {
+        vkWaitForFences (pDevice.getDevice (), 1,
+                         &syncObjects.inFlightFence[currentSyncIndex], VK_TRUE, UINT64_MAX);
+        vkResetFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[currentSyncIndex]);
     }
 
     void drawWithDrawer (VulkanImageDrawer& imageDrawer,
                          const VulkanBuffer& vertexBuffer,
                          const VulkanBuffer& indexBuffer,
                          const std::vector<MeshDrawInfo>& meshPool,
+                         bool isFirstPass,
                          const std::vector<uint32_t>& drawCallMeshIndices) {
-        uint32_t currentFrame = imageDrawer.getCurrentFrame ();
-        imageDrawer.waitAndReset ();
-        uint32_t imageIndex = acquireNextImageIndex (
-        imageDrawer.getSyncObjects ().imageAvailableSemaphore[currentFrame]);
-
-        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices, 1, 1, imageIndex);
-
-        present (imageDrawer.getSyncObjects ().renderFinishedSemaphore[currentFrame],
-                           imageIndex);
+        waitAndResetFences ();
+        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices, syncObjects, true, true, isFirstPass, currentSyncIndex, currentFrame);
     }
     ~VulkanSwapchain () {
         destroy ();

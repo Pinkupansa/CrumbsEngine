@@ -86,7 +86,7 @@ class VulkanPipeline {
         VkPipelineRasterizationStateCreateInfo rasterizerInfo =
         createDefaultRasterizerInfo (cullMode);
 
-        VkPipelineMultisampleStateCreateInfo multisamplingInfo = createDefaultMSAAInfo ();
+        VkPipelineMultisampleStateCreateInfo multisamplingInfo = createMSAAInfo (renderPass.hasResolveAttachment());
 
         VkPipelineColorBlendAttachmentState colorBlendAttachment =
         createFullColorBlendAttachment ();

@@ -28,6 +28,8 @@ class VulkanRenderer {
     std::string vertShaderPath   = "./shaders/test.vert.spv";
     std::string fragShaderPath   = "./shaders/test.frag.spv";
     std::string shadowShaderPath = "./shaders/shadows.vert.spv";
+
+    std::vector<std::string> fragShaderPaths;
     // Window info
     GLFWwindow* window;
     uint32_t width;
@@ -64,6 +66,14 @@ class VulkanRenderer {
     VulkanImageDrawer mainImageDrawer;
     VulkanImageDrawer shadowImageDrawer;
 
+    // use heap because created when loading shader and hold references to VkObjects that are destroyed if the object is destroyed
+    std::vector<VulkanImageDrawer*> imageDrawersPerFragShader;
+    std::vector<std::vector<VulkanUniformBufferObject>> ubosPerFragShader;
+    std::vector<VulkanUBDescriptor*> objectsUBDescriptorPerFragShader;
+    std::vector<VulkanBuffer*> objectsUBPerFragShader;
+    std::vector<std::vector<uint32_t>> drawCallMeshIndicesPerFragShader;
+    std::vector<int> uboAlignedSizePerFragShader;
+
     // Scene / draw data
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -71,11 +81,11 @@ class VulkanRenderer {
     std::vector<uint32_t> drawCallMeshIndices;
 
     VulkanSceneUBO sceneData;
+    // todo : separate UBOs for the vertex shader (shared) and UBO for each frag shader
     std::vector<VulkanUniformBufferObject> ubos;
 
-    // todo : Create shadow render pass, shadow pipeline, shadowframebuffers and shadow syncobjects
-    int currentFrame = 0;
 
+    bool loadedFirstDrawer = false; // used to decide which drawer will clean
     std::vector<uint8_t> padData (std::vector<VulkanUniformBufferObject> ubos,
                                   VkDeviceSize alignedSize) {
         std::vector<uint8_t> paddedData (alignedSize * ubos.size (), 0); // zero-initialized
@@ -151,18 +161,19 @@ class VulkanRenderer {
                          "Shadow Image Drawer"),
       mainImageDrawer (device,
                        mainSurface.getCapabilities ().currentExtent,
-                       swapchain.getAttachmentsPerFramebuffer (),
+                       swapchain.getAttachmentsPerImage (),
                        { sceneDataUBDescriptor.getDescData (0, 0),
                          objectsUBDescriptor.getDescData (0, 1),
                          shadowView.getDescData (0, 2), textureBundle.getDescData (0, 3) },
-                       { createColorAttachment (false) },
-                       { createDepthAttachment () },
-                       { createColorAttachment(true)},
+                       { createColorAttachment (false, VK_ATTACHMENT_LOAD_OP_CLEAR) },
+                       { createDepthAttachment (VK_ATTACHMENT_LOAD_OP_CLEAR) },
+                       { createColorAttachment (true, VK_ATTACHMENT_LOAD_OP_CLEAR) },
                        { vertShaderPath },
                        { fragShaderPath },
                        VK_CULL_MODE_BACK_BIT,
                        VK_COMPARE_OP_LESS,
-                       "Main Image Drawer") {
+                       "Main Image Drawer")
+    /*TODO : Create instead one image drawer per fragShader, and one objectsUB per shader ?*/ {
         std::cout << "Vertex buffer size: " << MAX_VERTEX_NUMBER * vertexSize << std::endl;
         std::cout << "Index buffer size: " << MAX_INDEX_NUMBER * indexSize << std::endl;
         std::cout << "Objects UB size: " << MAX_OBJECTS_UB * uboAlignedSize << std::endl;
@@ -205,18 +216,33 @@ class VulkanRenderer {
     }
 
 
-    void addMeshDrawCall (uint32_t meshIndex,
+    void addMeshDrawCall (int shaderIndex,
+                          uint32_t meshIndex,
                           glm::mat4 transform,
                           uint32_t textureIndex,
                           uint32_t normalMapIndex,
                           glm::vec2 tilingFactor = glm::vec2 (1.0f, 1.0f),
-                          bool castsShadows = true,
-                          bool isLit = true) {
+                          bool castsShadows      = true,
+                          bool isLit             = true) {
+        if (shaderIndex >= imageDrawersPerFragShader.size ()) {
+            Debug::LogWarning ("Shader index " + std::to_string (shaderIndex) + " does not exist !");
+        }
+
+        drawCallMeshIndicesPerFragShader[shaderIndex].push_back (meshIndex);
         drawCallMeshIndices.push_back (meshIndex);
-        ubos.push_back ({ transform, textureBundle.getTextureAtlasOffset (textureIndex),
-                          textureBundle.getTextureSize (textureIndex),
-                          textureBundle.getTextureAtlasOffset (normalMapIndex),
-                          textureBundle.getTextureSize (normalMapIndex), tilingFactor, castsShadows, isLit});
+
+        VulkanUniformBufferObject ubo = { transform,
+                                          textureBundle.getTextureAtlasOffset (textureIndex),
+                                          textureBundle.getTextureSize (textureIndex),
+                                          textureBundle.getTextureAtlasOffset (normalMapIndex),
+                                          textureBundle.getTextureSize (normalMapIndex),
+                                          tilingFactor,
+                                          castsShadows,
+                                          isLit };
+        // todo: take the frag shader index as an argument and add to the corresponding ubo instead
+        ubos.push_back (ubo);
+
+        ubosPerFragShader[shaderIndex].push_back (ubo);
     }
 
     void initSceneData (const Scene& scene) {
@@ -226,7 +252,9 @@ class VulkanRenderer {
                           (float)mainSurface.getCapabilities ().currentExtent.height,
                           0.1f, 200.0f);
         proj[1][1] *= -1;
-        sceneData = VulkanSceneUBO (scene.getMainCamera()->getView(), proj, scene.lightDir, scene.lightColor, scene.groundColor, scene.skyColor);
+        sceneData =
+        VulkanSceneUBO (scene.getMainCamera ()->getView (), proj, scene.lightDir,
+                        scene.lightColor, scene.groundColor, scene.skyColor);
         sceneDataUB.update (&sceneData, sizeof (VulkanSceneUBO), 0);
     }
 
@@ -237,12 +265,80 @@ class VulkanRenderer {
 
         shadowView.drawWithDrawer (shadowImageDrawer, vertexBuffer, indexBuffer,
                                    meshPool, drawCallMeshIndices);
-        swapchain.drawWithDrawer (mainImageDrawer, vertexBuffer, indexBuffer,
-                                  meshPool, drawCallMeshIndices);
 
-        currentFrame = (currentFrame + 1) % 3;
+        swapchain.updateFrameIndex ();
+
+        for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
+            if (ubosPerFragShader[i].size () == 0) {
+                continue;
+            }
+            std::vector<uint8_t> paddedUBOsForShader =
+            padData (ubosPerFragShader[i], uboAlignedSizePerFragShader[i]);
+            objectsUBPerFragShader[i]->update (paddedUBOsForShader.data (),
+                                               paddedUBOsForShader.size (), 0);
+            swapchain.drawWithDrawer (*imageDrawersPerFragShader[i],
+                                      vertexBuffer, indexBuffer, meshPool, i == 0,
+                                      drawCallMeshIndicesPerFragShader[i]);
+        }
+        // swapchain.drawWithDrawer (mainImageDrawer, vertexBuffer, indexBuffer,
+        //   meshPool, drawCallMeshIndices);
+
+        swapchain.present ();
+
         ubos.clear ();
         drawCallMeshIndices.clear ();
+        for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
+            ubosPerFragShader[i].clear ();
+            drawCallMeshIndicesPerFragShader[i].clear ();
+        }
+    }
+
+    int loadShader (const std::string& filePath, VkCompareOp compareOp) {
+        fragShaderPaths.push_back (filePath);
+
+        std::vector<VulkanUniformBufferObject> ubosForShader;
+        ubosPerFragShader.push_back (ubosForShader);
+
+        VkDeviceSize size        = sizeof (VulkanUniformBufferObject);
+        VkDeviceSize alignedSize = (size + alignment - 1) & ~(alignment - 1);
+
+        VulkanBuffer* objectsUBForShader =
+        new VulkanBuffer (device, VulkanBufferType::Uniform,
+                          alignedSize * MAX_OBJECTS_UB, nullptr, true,
+                          alignedSize, "Shader " + filePath + " ObjectUB");
+
+        objectsUBPerFragShader.push_back (objectsUBForShader);
+
+        VulkanUBDescriptor* objectsUBDescForShader =
+        new VulkanUBDescriptor (device, *objectsUBPerFragShader.back (),
+                                VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+                                size, "Shader " + filePath + " UBODescriptor");
+
+        objectsUBDescriptorPerFragShader.push_back (objectsUBDescForShader);
+
+
+        VulkanImageDrawer* shaderDrawer = new VulkanImageDrawer (
+        device, mainSurface.getCapabilities ().currentExtent,
+        swapchain.getAttachmentsPerImage (),
+        { sceneDataUBDescriptor.getDescData (0, 0),
+          objectsUBDescriptorPerFragShader.back ()->getDescData (0, 1),
+          shadowView.getDescData (0, 2), textureBundle.getDescData (0, 3) },
+        { createColorAttachment (false, loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR) },
+        { createDepthAttachment (loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD :
+                                                     VK_ATTACHMENT_LOAD_OP_CLEAR) },
+        { createColorAttachment (true, loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR) },
+        { vertShaderPath }, { filePath },
+
+        VK_CULL_MODE_BACK_BIT, compareOp, "Shader " + filePath);
+
+        imageDrawersPerFragShader.push_back (shaderDrawer);
+
+        uboAlignedSizePerFragShader.push_back (alignedSize);
+
+        std::vector<uint32_t> drawCallMeshIndicesForShader;
+        drawCallMeshIndicesPerFragShader.push_back (drawCallMeshIndicesForShader);
+        loadedFirstDrawer = true;
+        return fragShaderPaths.size () - 1;
     }
 
     uint16_t loadTexture (const std::string& texturePath) {
@@ -262,6 +358,17 @@ class VulkanRenderer {
         }
         vkDeviceWaitIdle (device.getDevice ());
 
+
+        for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
+            objectsUBPerFragShader[i]->destroy ();
+            delete objectsUBPerFragShader[i];
+
+            objectsUBDescriptorPerFragShader[i]->destroy ();
+            delete objectsUBDescriptorPerFragShader[i];
+
+            imageDrawersPerFragShader[i]->destroy ();
+            delete imageDrawersPerFragShader[i];
+        }
         shadowImageDrawer.destroy ();
         mainImageDrawer.destroy ();
         sceneDataUBDescriptor.destroy ();
