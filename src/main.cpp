@@ -18,7 +18,8 @@ void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
     renderer.addMeshDrawCall (crumb.renderData.value ().material.shaderIndex,
                               crumb.renderData.value ().material.materialProperties,
                               crumb.renderData.value ().meshIndex,
-                              crumb.transform.getModelMatrix ());
+                              crumb.transform.getModelMatrix (),
+                              crumb.renderData.value ().castsShadows);
 }
 void renderScene (VulkanRenderer& renderer, Scene& scene) {
     if (!scene.hasCamera ()) {
@@ -84,13 +85,13 @@ int main () {
     renderer.loadTexture ("textures/Dragon_ground_color.jpg");
     renderer.buildTextureAtlas ();
 
-
+    int testShaderInd = renderer.loadShader ("shaders/test.frag", VK_COMPARE_OP_LESS);
     int testShader2Ind = renderer.loadShader ("shaders/test2.frag", VK_COMPARE_OP_LESS);
 
 
-    Material m (testShader2Ind);
-    m.setProperty("test", 0.5f);
-    m.setProperty("test2", 0.5f);
+    Material m (testShaderInd);
+    // m.setProperty("test", 0.5f);
+    // m.setProperty("test2", 0.5f);
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
     sphereObject.transform.position = { 2, -0.5f, -3 };
@@ -121,6 +122,7 @@ int main () {
     dragonObject.transform.rotate ({ 1, 0, 0 }, 1.57);
     dragonObject.transform.rotate ({ 0, 1, 0 }, 3.14);
     dragonObject.transform.rotate ({ 0, 0, 1 }, 3.14);
+
 
     Scene scene;
     scene.addCrumb (sphereObject);

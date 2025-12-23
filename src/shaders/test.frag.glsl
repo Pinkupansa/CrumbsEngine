@@ -23,6 +23,14 @@ layout(set = 0, binding = 0) uniform SceneUBO {
 // Object UBO
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
+
+} object;
+
+layout(set = 2, binding = 0) uniform sampler2D shadowSampler;
+
+layout(set = 3, binding = 0) uniform sampler2D textureAtlas[8];
+
+layout(set = 4, binding = 0) uniform CustomObjectUBO { 
     vec2 atlasOffset;
     vec2 relativeTextureSixe;
     vec2 normalmapAtlasOffset;
@@ -30,12 +38,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     vec2 tilingFactor;
     bool castsShadows;
     bool isLit;
-} object;
-
-layout(set = 2, binding = 0) uniform sampler2D shadowSampler;
-
-layout(set = 3, binding = 0) uniform sampler2D textureAtlas[8];
-
+} customProps;
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
 
@@ -93,10 +96,10 @@ vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilin
     return sampleAtlasAA(uv, atlasOffset, relativeTexSixe, tilingFactor);
 }
 vec3 computeNormal(){
-    if(object.normalmapAtlasOffset.r < 0){
+    if(customProps.normalmapAtlasOffset.r < 0){
         return vertNormal;
     }
-    vec3 normalMapSample = computeTexColor(fragUV, object.normalmapAtlasOffset, object.normalmapRelativeTextureSize, object.tilingFactor, fragCamPos.z).rgb;
+    vec3 normalMapSample = computeTexColor(fragUV, customProps.normalmapAtlasOffset, customProps.normalmapRelativeTextureSize, customProps.tilingFactor, fragCamPos.z).rgb;
 
 
     return normalize(normalMapSample.r*vertTangent + normalMapSample.g * vertBitangent + normalMapSample.b * vertNormal);
@@ -195,8 +198,8 @@ vec3 computeAmbient(vec3 N){
     return mix(scene.groundColor, scene.skyColor, N.y * 0.5 + 0.5)*0.01;
 }
 void main() {
-     vec3 textureColor = computeTexColor(fragUV, object.atlasOffset, object.relativeTextureSixe, object.tilingFactor, fragCamPos.z).rgb;
-    if(!object.isLit){
+     vec3 textureColor = computeTexColor(fragUV, customProps.atlasOffset, customProps.relativeTextureSixe, customProps.tilingFactor, fragCamPos.z).rgb;
+    if(!customProps.isLit){
         outColor = vec4(textureColor, 1.0f);
         return;
     }
