@@ -85,20 +85,27 @@ int main () {
     renderer.loadTexture ("textures/Dragon_ground_color.jpg");
     renderer.buildTextureAtlas ();
 
-    int testShaderInd = renderer.loadShader ("shaders/test.frag", VK_COMPARE_OP_LESS);
-    int testShader2Ind = renderer.loadShader ("shaders/test2.frag", VK_COMPARE_OP_LESS);
+    int litShaderIndex = renderer.loadShader ("shaders/lit.frag", VK_COMPARE_OP_LESS);
+    int unlitShaderIndex = renderer.loadShader ("shaders/unlit.frag", VK_COMPARE_OP_LESS);
 
 
-    Material m (testShader2Ind);
-    // m.setProperty("test", 0.5f);
-    // m.setProperty("test2", 0.5f);
+    Material m (litShaderIndex);
+    m.setProperty("atlasOffset", renderer.getTextureAtlasOffset(rockwallTexIndex));
+    m.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(rockwallTexIndex));
+    m.setProperty("normalmapAtlasOffset", renderer.getTextureAtlasOffset(stonewallNormalMapIndex));
+    m.setProperty("normalmapRelativeTextureSize", renderer.getRelativeTextureSize(stonewallNormalMapIndex));
+    m.setProperty("tilingFactor", glm::vec2(1.0f));
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
     sphereObject.transform.position = { 2, -0.5f, -3 };
     sphereObject.transform.rotate ({ 1, 0, 0 }, -1.57);
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
-    Material m2 (testShader2Ind);
+    Material m2 (litShaderIndex);
+    m2.setProperty("atlasOffset", renderer.getTextureAtlasOffset(grassIndex));
+    m2.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(grassIndex));
+    m2.setProperty("tilingFactor", glm::vec2(10.0f));
+
     RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
     floorObject.transform.rotate ({ 1, 0, 0 }, 0);
@@ -108,13 +115,21 @@ int main () {
 
     Mesh skybox     = generateInvertedSphere ();
     int skyboxIndex = renderer.loadMesh (skybox);
-    Material m3 (testShader2Ind);
-    RenderData skyRenderData (skyboxIndex, m3);
+    Material m3 (unlitShaderIndex);
+    m3.setProperty("atlasOffset", renderer.getTextureAtlasOffset(skyboxTexture));
+    m3.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(skyboxTexture));
+    m3.setProperty("tilingFactor", glm::vec2(1.0f));
+ 
+    RenderData skyRenderData (skyboxIndex, m3, false);
     Crumb skyboxObject (skyRenderData);
     skyboxObject.transform.scaleByFactor (glm::vec3 (100.0f));
     skyboxObject.transform.rotate ({ 1, 0, 0 }, 3.14);
 
-    Material mDragon (testShader2Ind);
+    Material mDragon (litShaderIndex);
+    mDragon.setProperty("atlasOffset", renderer.getTextureAtlasOffset(dragonTexture));
+    mDragon.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(dragonTexture));
+    mDragon.setProperty("tilingFactor", glm::vec2(1.0f));
+
     RenderData dragonRenderData (dragonIndex, mDragon);
     Crumb dragonObject (dragonRenderData);
     dragonObject.transform.position = { 0, 2, 0 };
@@ -127,7 +142,7 @@ int main () {
     Scene scene;
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
-    // scene.addCrumb (skyboxObject);
+    scene.addCrumb (skyboxObject);
     scene.addCrumb (dragonObject);
     Camera cam ({ 0, 0, 0 }, { 0, 0, 1 });
     scene.setCamera (cam);

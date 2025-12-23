@@ -108,12 +108,12 @@ class VulkanRenderer {
                    "Index Buffer"),
 
       allObjectsUB (device,
-                 VulkanBufferType::Uniform,
-                 MAX_OBJECTS_UB * uboAlignedSize,
-                 nullptr,
-                 true,
-                 uboAlignedSize,
-                 "Objects UB"),
+                    VulkanBufferType::Uniform,
+                    MAX_OBJECTS_UB * uboAlignedSize,
+                    nullptr,
+                    true,
+                    uboAlignedSize,
+                    "Objects UB"),
       sceneDataUB (device,
                    VulkanBufferType::Uniform,
                    MAX_SCENE_DATA * sizeof (VulkanSceneUBO),
@@ -123,10 +123,10 @@ class VulkanRenderer {
                    "SceneData UB"),
 
       allObjectsUBDescriptor (device,
-                           allObjectsUB,
-                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                           uboSize,
-                           "Objects UB Descriptor Set"),
+                              allObjectsUB,
+                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                              uboSize,
+                              "Objects UB Descriptor Set"),
       sceneDataUBDescriptor (device,
                              sceneDataUB,
                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -189,7 +189,11 @@ class VulkanRenderer {
     }
 
 
-    void addMeshDrawCall (int shaderIndex, FSBObject fsbObject, uint32_t meshIndex, glm::mat4 transform, bool castsShadows) {
+    void addMeshDrawCall (int shaderIndex,
+                          FSBObject fsbObject,
+                          uint32_t meshIndex,
+                          glm::mat4 transform,
+                          bool castsShadows) {
         if (shaderIndex >= imageDrawersPerFragShader.size ()) {
             Debug::LogWarning ("Shader index " + std::to_string (shaderIndex) + " does not exist !");
         }
@@ -197,9 +201,9 @@ class VulkanRenderer {
         drawCallMeshIndicesPerFragShader[shaderIndex].push_back (meshIndex);
         drawCallMeshIndices.push_back (meshIndex);
 
-        VulkanUniformBufferObject ubo = {transform, castsShadows};
+        VulkanUniformBufferObject ubo = { transform, castsShadows };
         ubos.push_back (ubo);
-        ubosPerFragShader[shaderIndex].push_back(ubo);
+        ubosPerFragShader[shaderIndex].push_back (ubo);
 
         int objectIndex = flexibleBufferPerFragShader[shaderIndex]->addObject (fsbObject);
 
@@ -220,7 +224,7 @@ class VulkanRenderer {
     }
 
     void drawFrame () {
-        
+
         // pad and upload object UBOs
         std::vector<uint8_t> paddedUBOs = padUBOData (ubos, uboAlignedSize);
         allObjectsUB.update (paddedUBOs.data (), paddedUBOs.size (), 0);
@@ -229,16 +233,19 @@ class VulkanRenderer {
                                    meshPool, drawCallMeshIndices);
 
         swapchain.updateFrameIndex ();
-        //dummy draw for clear pass not to be empty
 
-        addMeshDrawCall(0, flexibleBufferPerFragShader[0]->getDefaultObject(), 0, glm::scale(glm::mat4(1.0f), glm::vec3(0)), false); 
+        // dummy draw for first render pass not to be empty which would not signal the renderFinishedSemaphore
+        addMeshDrawCall (0, flexibleBufferPerFragShader[0]->getDefaultObject (),
+                         0, glm::scale (glm::mat4 (1.0f), glm::vec3 (0)), false);
 
         for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
             if (flexibleBufferPerFragShader[i]->isEmpty ()) {
                 continue;
             }
-            std::vector<uint8_t> paddedUBOsForShader = padUBOData(ubosPerFragShader[i], uboAlignedSize);
-            objectsUBPerFragShader[i]->update(paddedUBOsForShader.data(), paddedUBOsForShader.size(), 0);
+            std::vector<uint8_t> paddedUBOsForShader =
+            padUBOData (ubosPerFragShader[i], uboAlignedSize);
+            objectsUBPerFragShader[i]->update (paddedUBOsForShader.data (),
+                                               paddedUBOsForShader.size (), 0);
             flexibleBufferPerFragShader[i]->pushToGPU ();
             swapchain.drawWithDrawer (*imageDrawersPerFragShader[i],
                                       vertexBuffer, indexBuffer, meshPool, i == 0,
@@ -254,7 +261,7 @@ class VulkanRenderer {
         for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
             flexibleBufferPerFragShader[i]->clear ();
             drawCallMeshIndicesPerFragShader[i].clear ();
-            ubosPerFragShader[i].clear();
+            ubosPerFragShader[i].clear ();
         }
     }
 
@@ -291,7 +298,7 @@ class VulkanRenderer {
 
         customUBDescriptorPerFragShader.push_back (customUBDescForShader);
 
-        
+
         VulkanImageDrawer* shaderDrawer = new VulkanImageDrawer (
         device, mainSurface.getCapabilities ().currentExtent,
         swapchain.getAttachmentsPerImage (),
@@ -309,14 +316,14 @@ class VulkanRenderer {
         VK_CULL_MODE_BACK_BIT, compareOp, "Shader " + filePath);
 
         imageDrawersPerFragShader.push_back (shaderDrawer);
-        
+
         std::vector<uint32_t> drawCallMeshIndicesForShader;
         drawCallMeshIndicesPerFragShader.push_back (drawCallMeshIndicesForShader);
 
-        std::vector<VulkanUniformBufferObject> ubosForShader; 
-        ubosPerFragShader.push_back(ubosForShader);
+        std::vector<VulkanUniformBufferObject> ubosForShader;
+        ubosPerFragShader.push_back (ubosForShader);
 
-        int shaderIndex = fragShaderPaths.size () - 1; 
+        int shaderIndex   = fragShaderPaths.size () - 1;
         loadedFirstDrawer = true;
 
         return shaderIndex;
@@ -328,6 +335,13 @@ class VulkanRenderer {
 
     void buildTextureAtlas () {
         textureBundle.buildTextureAtlas ();
+    }
+
+    glm::vec2 getTextureAtlasOffset(int textureIndex){
+        return textureBundle.getTextureAtlasOffset(textureIndex);
+    }
+    glm::vec2 getRelativeTextureSize(int textureIndex){
+        return textureBundle.getTextureSize(textureIndex);
     }
     ~VulkanRenderer () {
         destroy ();
@@ -350,10 +364,10 @@ class VulkanRenderer {
             imageDrawersPerFragShader[i]->destroy ();
             delete imageDrawersPerFragShader[i];
 
-            objectsUBDescriptorPerFragShader[i]->destroy();
+            objectsUBDescriptorPerFragShader[i]->destroy ();
             delete objectsUBDescriptorPerFragShader[i];
 
-            objectsUBPerFragShader[i]->destroy();
+            objectsUBPerFragShader[i]->destroy ();
             delete objectsUBPerFragShader[i];
         }
         shadowImageDrawer.destroy ();

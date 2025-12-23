@@ -32,12 +32,10 @@ layout(set = 3, binding = 0) uniform sampler2D textureAtlas[8];
 
 layout(set = 4, binding = 0) uniform CustomObjectUBO { 
     vec2 atlasOffset;
-    vec2 relativeTextureSixe;
+    vec2 relativeTextureSize;
     vec2 normalmapAtlasOffset;
     vec2 normalmapRelativeTextureSize;
     vec2 tilingFactor;
-    bool castsShadows;
-    bool isLit;
 } customProps;
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
@@ -198,11 +196,7 @@ vec3 computeAmbient(vec3 N){
     return mix(scene.groundColor, scene.skyColor, N.y * 0.5 + 0.5)*0.01;
 }
 void main() {
-     vec3 textureColor = computeTexColor(fragUV, customProps.atlasOffset, customProps.relativeTextureSixe, customProps.tilingFactor, fragCamPos.z).rgb;
-    if(!customProps.isLit){
-        outColor = vec4(textureColor, 1.0f);
-        return;
-    }
+    vec3 textureColor = computeTexColor(fragUV, customProps.atlasOffset, customProps.relativeTextureSize, customProps.tilingFactor, fragCamPos.z).rgb;
     vec3 N = computeNormal(); 
     vec3 L = getLightDir();
 

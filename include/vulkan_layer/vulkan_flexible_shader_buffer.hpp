@@ -106,7 +106,7 @@ class VulkanFSB {
     void setObjectAttribute (int objectIndex,
                              const std::string& attributeName,
                              const UniformVariant& value) {
-        if (objects[objectIndex].find (attributeName) == objects[objectIndex].end ()) {
+        if (!objects[objectIndex].contains (attributeName)) {
             throw std::runtime_error ("Attribute not found: " + attributeName);
         }
 
