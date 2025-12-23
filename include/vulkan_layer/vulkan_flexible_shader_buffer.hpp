@@ -36,6 +36,9 @@ class VulkanFSB {
 
 
     public:
+    const FSBObject getDefaultObject() const {
+        return prototype;
+    }
     VulkanFSB (const VulkanDevice& device,
                std::string jsonFile,
                int uboSetNumber,

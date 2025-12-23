@@ -89,7 +89,7 @@ int main () {
     int testShader2Ind = renderer.loadShader ("shaders/test2.frag", VK_COMPARE_OP_LESS);
 
 
-    Material m (testShaderInd);
+    Material m (testShader2Ind);
     // m.setProperty("test", 0.5f);
     // m.setProperty("test2", 0.5f);
     RenderData sphereRenderData (sphereIndex, m);

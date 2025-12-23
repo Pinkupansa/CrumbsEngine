@@ -220,6 +220,7 @@ class VulkanRenderer {
     }
 
     void drawFrame () {
+        
         // pad and upload object UBOs
         std::vector<uint8_t> paddedUBOs = padUBOData (ubos, uboAlignedSize);
         allObjectsUB.update (paddedUBOs.data (), paddedUBOs.size (), 0);
@@ -228,6 +229,9 @@ class VulkanRenderer {
                                    meshPool, drawCallMeshIndices);
 
         swapchain.updateFrameIndex ();
+        //dummy draw for clear pass not to be empty
+
+        addMeshDrawCall(0, flexibleBufferPerFragShader[0]->getDefaultObject(), 0, glm::scale(glm::mat4(1.0f), glm::vec3(0)), false); 
 
         for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
             if (flexibleBufferPerFragShader[i]->isEmpty ()) {
@@ -311,8 +315,11 @@ class VulkanRenderer {
 
         std::vector<VulkanUniformBufferObject> ubosForShader; 
         ubosPerFragShader.push_back(ubosForShader);
+
+        int shaderIndex = fragShaderPaths.size () - 1; 
         loadedFirstDrawer = true;
-        return fragShaderPaths.size () - 1;
+
+        return shaderIndex;
     }
 
     uint16_t loadTexture (const std::string& texturePath) {
