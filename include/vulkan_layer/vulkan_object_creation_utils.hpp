@@ -25,9 +25,8 @@ VkImage createImage (const VulkanDevice& device,
     imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage         = imageUsage;
-    imageInfo.samples       = isResolve? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;
+    imageInfo.samples       = isResolve ? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;
     imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
-
     VkImage image;
     if (vkCreateImage (device.getDevice (), &imageInfo, nullptr, &image) != VK_SUCCESS) { // depth image creation
         throw std::runtime_error ("Failed to create depth image!");
@@ -37,12 +36,14 @@ VkImage createImage (const VulkanDevice& device,
     return image;
 }
 
-VkImage createColorImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
+VkImage
+createColorImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
     return createImage (device, extent, DEFAULT_COLOR_FORMAT,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, isResolve, name);
 }
 
-VkImage createDepthImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
+VkImage
+createDepthImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
     return createImage (device, extent, DEFAULT_DEPTH_FORMAT,
                         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, isResolve, name);
 }
@@ -162,15 +163,17 @@ VkDeviceMemory allocateAndBindBufferMemory (const VulkanDevice& device,
     return memory;
 }
 
-VkAttachmentDescription createColorAttachment (bool isResolve, VkAttachmentLoadOp loadOp){
+VkAttachmentDescription createColorAttachment (bool isResolve, VkAttachmentLoadOp loadOp) {
     VkAttachmentDescription colorAttachment;
-    colorAttachment.format  = DEFAULT_COLOR_FORMAT;        // same as swapchain
-    colorAttachment.samples = isResolve? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;                  // no MSAA for now
-    colorAttachment.loadOp  = loadOp; // clear at start
+    colorAttachment.format = DEFAULT_COLOR_FORMAT; // same as swapchain
+    colorAttachment.samples = isResolve ? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL; // no MSAA for now
+    colorAttachment.loadOp = loadOp;                        // clear at start
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store result for presentation
     colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.initialLayout  = loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ?
+     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR :
+     VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // ready for presentation
     colorAttachment.flags = 0;
     return colorAttachment;
@@ -188,10 +191,13 @@ VkAttachmentDescription createDepthAttachment (VkAttachmentLoadOp loadOp) {
     depthAttachment.format = DEFAULT_DEPTH_FORMAT; // the same format as your depth image
     depthAttachment.samples = MSAA_LEVEL;
     depthAttachment.loadOp  = loadOp;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // depth not presented
+    depthAttachment.storeOp =
+    VK_ATTACHMENT_STORE_OP_STORE; // depth must be preserved throughout passes
     depthAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.initialLayout  = loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ?
+     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+     VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     return depthAttachment;
 }
@@ -499,8 +505,8 @@ VkPipelineRasterizationStateCreateInfo createDefaultRasterizerInfo (VkCullModeFl
 VkPipelineMultisampleStateCreateInfo createMSAAInfo (bool hasResolve) {
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.sampleShadingEnable  = VK_FALSE;
-    multisampling.rasterizationSamples = hasResolve? MSAA_LEVEL: VK_SAMPLE_COUNT_1_BIT;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = hasResolve ? MSAA_LEVEL : VK_SAMPLE_COUNT_1_BIT;
     return multisampling;
 }
 
@@ -783,7 +789,32 @@ void transitionImageLayout (const VulkanDevice& device,
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         sourceStage           = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         destinationStage      = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else {
+    } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+               newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT) {
+            barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+        sourceStage      = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+               newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = 0;
+
+        sourceStage      = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+    else {
         throw std::invalid_argument ("Unsupported layout transition!");
     }
 
@@ -979,9 +1010,9 @@ std::vector<glm::vec4> applyHorizontalBlur (const std::vector<glm::vec4>& pixels
     std::vector<glm::vec4> destination (pixels.size ());
     const glm::vec4* src = pixels.data ();      // pointer to input
     glm::vec4* dst       = destination.data (); // pointer to output
-    int effectiveRad = std::min(radius, texWidth);
-    
-    #pragma omp parallel for
+    int effectiveRad     = std::min (radius, texWidth);
+
+#pragma omp parallel for
     for (int y = 0; y < texHeight; ++y) {
         const glm::vec4* row = src + y * texWidth; // start of row y
         glm::vec4* outRow    = dst + y * texWidth;
@@ -1007,7 +1038,7 @@ std::vector<glm::vec4> applyVerticalBlurAndDownscale (const std::vector<glm::vec
     int newTexWidth  = texWidth / 2;
     int newTexHeight = texHeight / 2;
     int radius       = kernel.size () / 2;
-    int effectiveRad = std::min(radius, texHeight);
+    int effectiveRad = std::min (radius, texHeight);
     std::vector<glm::vec4> dstPixels (newTexWidth * newTexHeight);
 
 #pragma omp parallel for
@@ -1032,7 +1063,7 @@ std::vector<glm::vec4> applyVerticalBlurAndDownscale (const std::vector<glm::vec
 }
 std::vector<uint8_t>
 applyGaussianKernel (const std::vector<uint8_t>& pixels, int texWidth, int texHeight, float sigma) {
-    std::vector<float> kernel = makeGaussianKernel (sigma);
+    std::vector<float> kernel        = makeGaussianKernel (sigma);
     std::vector<glm::vec4> rgbFormat = convertU8ToVec4 (pixels);
 
     std::vector<glm::vec4> hblurred =
@@ -1041,7 +1072,7 @@ applyGaussianKernel (const std::vector<uint8_t>& pixels, int texWidth, int texHe
 
     std::vector<glm::vec4> vblurred =
     applyVerticalBlurAndDownscale (hblurred, texWidth, texHeight, kernel);
-   
+
     std::vector<glm::uint8_t> output = convertVec4ToU8 (vblurred);
 
 
@@ -1106,7 +1137,8 @@ void createImageAndMipmapsFromFile (const VulkanDevice& device,
     mipmapsWidths.resize (nMipmaps);
     mipmapsHeights.resize (nMipmaps);
 
-    const float SIGMA_TRANSITION = 0.71f; // best results combined with textureLod sampling in the shader
+    const float SIGMA_TRANSITION =
+    0.71f; // best results combined with textureLod sampling in the shader
     int texChannels;
     stbi_set_flip_vertically_on_load (true);
     stbi_uc* rawPixels = stbi_load (filename.c_str (), &mipmapsWidths[0],

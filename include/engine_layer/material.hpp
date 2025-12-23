@@ -1,33 +1,20 @@
 #pragma once
 #include <cstdint>
 #include <glm/glm.hpp>
-
+#include "fsb_object.hpp"
+#include <map>
 // engine level material definition
 // can be converted to vulkan level descriptor set later
 
 struct Material {
     int shaderIndex;
-    glm::vec4 tint;
-    float specularIntensity;
-    // texture
-    int textureImageIndex  = -1;
-    int normalMapIndex     = -1;
-    glm::vec2 tilingFactor = { 1, 1 };
-    bool isLit;
-    bool castsShadows;
+    FSBObject materialProperties;
+    Material (int shaderIndex, FSBObject materialProperties): shaderIndex(shaderIndex){}
+    Material(int shaderIndex) : shaderIndex(shaderIndex){}
 
-    Material (int shaderIndex,
-              glm::vec4 tint,
-              float specularIntensity,
-              int textureImageIndex,
-              int normalMapIndex,
-              glm::vec2 tilingFactor,
-              bool castsShadows,
-              bool isLit)
-    : shaderIndex(shaderIndex), tint (tint), specularIntensity (specularIntensity),
-      textureImageIndex (textureImageIndex), normalMapIndex (normalMapIndex),
-      tilingFactor (tilingFactor), castsShadows(castsShadows), isLit(isLit) {
+    void setProperty(std::string name, UniformVariant value){
+      materialProperties[name] = value;
     }
 };
 
-static const Material DEFAULT_MATERIAL = {0, glm::vec4 (1.0f), 1.0f, -1, -1, { 1, 1 } , true, true};
+static const Material DEFAULT_MATERIAL = {0};

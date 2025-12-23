@@ -36,7 +36,7 @@ public:
         return alignedObjectSize;
     }
 
-    VulkanBuffer(VulkanDevice &deviceRef, VulkanBufferType type, VkDeviceSize size, const void *data = nullptr, bool dynamic = false, VkDeviceSize alignedObjectSize = 0, std::string name = "Buffer")
+    VulkanBuffer(const VulkanDevice &deviceRef, VulkanBufferType type, VkDeviceSize size, const void *data = nullptr, bool dynamic = false, VkDeviceSize alignedObjectSize = 0, std::string name = "Buffer")
         : device(deviceRef), type(type), size(size), dynamic(dynamic), alignedObjectSize(alignedObjectSize) {
 
         buffer = createBuffer(device, type, size, name);
@@ -72,6 +72,6 @@ public:
     }
 
 private:
-    VulkanDevice &device;
+    const VulkanDevice &device;
     VulkanBufferType type;
 };

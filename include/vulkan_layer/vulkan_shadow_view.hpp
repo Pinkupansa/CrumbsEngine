@@ -94,6 +94,7 @@ class VulkanShadowView {
                           drawCallMeshIndices, syncObjects, false, false, true, 0, 0);
     }
     void destroy () {
+        syncObjects.destroy();
         if (shadowDescLayout != VK_NULL_HANDLE) {
             vkDestroyDescriptorSetLayout (pDevice.getDevice (), shadowDescLayout, nullptr);
             shadowDescLayout = VK_NULL_HANDLE;

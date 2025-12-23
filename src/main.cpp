@@ -15,14 +15,10 @@ void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
     }
 
 
-    renderer.addMeshDrawCall (crumb.renderData.value().material.shaderIndex,
+    renderer.addMeshDrawCall (crumb.renderData.value ().material.shaderIndex,
+                              crumb.renderData.value ().material.materialProperties,
                               crumb.renderData.value ().meshIndex,
-                              crumb.transform.getModelMatrix (),
-                              crumb.renderData.value ().material.textureImageIndex,
-                              crumb.renderData.value ().material.normalMapIndex,
-                              crumb.renderData.value ().material.tilingFactor,
-                              crumb.renderData.value ().material.castsShadows,
-                              crumb.renderData.value ().material.isLit);
+                              crumb.transform.getModelMatrix ());
 }
 void renderScene (VulkanRenderer& renderer, Scene& scene) {
     if (!scene.hasCamera ()) {
@@ -65,8 +61,8 @@ int main () {
                 glm::vec3 (10.0f));
 
 
-    Mesh dragon = importMesh("dragon.fbx");
-    uint32_t dragonIndex = renderer.loadMesh(dragon);
+    Mesh dragon          = importMesh ("dragon.fbx");
+    uint32_t dragonIndex = renderer.loadMesh (dragon);
 
 
     float elapsedTime = 0;
@@ -75,7 +71,7 @@ int main () {
     // load all texture in the texture folder
     //  go through all files in the textures/ directory
 
-    int grassIndex = renderer.loadTexture ("textures/grass3.jpg");
+    int grassIndex       = renderer.loadTexture ("textures/grass3.jpg");
     int grassNormalIndex = renderer.loadTexture ("textures/grass3_normal.jpg");
     int rockwallTexIndex =
     renderer.loadTexture ("textures/cottage_diffuse.png");
@@ -83,24 +79,25 @@ int main () {
     int stonewallNormalMapIndex =
     renderer.loadTexture ("textures/cottage_normal.png");
 
-    int skyboxTexture = renderer.loadTexture("textures/sky2.jpg");
-    int dragonTexture = renderer.loadTexture("textures/Dragon_ground_color.jpg");
+    int skyboxTexture = renderer.loadTexture ("textures/sky2.jpg");
+    int dragonTexture =
+    renderer.loadTexture ("textures/Dragon_ground_color.jpg");
     renderer.buildTextureAtlas ();
 
-   
-    int testShaderInd = renderer.loadShader("shaders/test.frag.spv", VK_COMPARE_OP_LESS);
-    int testShader2Ind = renderer.loadShader("shaders/test2.frag.spv", VK_COMPARE_OP_LESS);
+
+    int testShader2Ind = renderer.loadShader ("shaders/test2.frag", VK_COMPARE_OP_LESS);
 
 
-    Material m (testShaderInd, { 1, 1, 1, 1 }, 1, rockwallTexIndex, stonewallNormalMapIndex,
-                { 1, 1 }, true, true);
+    Material m (testShader2Ind);
+    m.setProperty("test", 0.5f);
+    m.setProperty("test2", 0.5f);
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
     sphereObject.transform.position = { 2, -0.5f, -3 };
     sphereObject.transform.rotate ({ 1, 0, 0 }, -1.57);
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
-    Material m2 (testShader2Ind, { 1, 1, 1, 1 }, 1, grassIndex, grassNormalIndex, { 10, 10 }, true, true);
+    Material m2 (testShader2Ind);
     RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
     floorObject.transform.rotate ({ 1, 0, 0 }, 0);
@@ -110,32 +107,32 @@ int main () {
 
     Mesh skybox     = generateInvertedSphere ();
     int skyboxIndex = renderer.loadMesh (skybox);
-    Material m3 (testShaderInd, { 1, 1, 1, 1 }, 1, skyboxTexture, -1, { 1, 1 }, false, false);
+    Material m3 (testShader2Ind);
     RenderData skyRenderData (skyboxIndex, m3);
     Crumb skyboxObject (skyRenderData);
     skyboxObject.transform.scaleByFactor (glm::vec3 (100.0f));
-    skyboxObject.transform.rotate({1, 0, 0}, 3.14);
+    skyboxObject.transform.rotate ({ 1, 0, 0 }, 3.14);
 
-    Material mDragon (testShaderInd, {1, 1, 1, 1}, 1, dragonTexture, -1, {1, 1}, true, true);
-    RenderData dragonRenderData(dragonIndex, mDragon);
-    Crumb dragonObject (dragonRenderData); 
-    dragonObject.transform.position = {0, 2, 0};    
-    dragonObject.transform.scaleByFactor(glm::vec3(0.2f));
-    dragonObject.transform.rotate({1,0,0}, 1.57);
-    dragonObject.transform.rotate({0,1,0}, 3.14); 
-    dragonObject.transform.rotate({0,0,1}, 3.14); 
+    Material mDragon (testShader2Ind);
+    RenderData dragonRenderData (dragonIndex, mDragon);
+    Crumb dragonObject (dragonRenderData);
+    dragonObject.transform.position = { 0, 2, 0 };
+    dragonObject.transform.scaleByFactor (glm::vec3 (0.2f));
+    dragonObject.transform.rotate ({ 1, 0, 0 }, 1.57);
+    dragonObject.transform.rotate ({ 0, 1, 0 }, 3.14);
+    dragonObject.transform.rotate ({ 0, 0, 1 }, 3.14);
 
     Scene scene;
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
-   // scene.addCrumb (skyboxObject);
-    scene.addCrumb(dragonObject);
+    // scene.addCrumb (skyboxObject);
+    scene.addCrumb (dragonObject);
     Camera cam ({ 0, 0, 0 }, { 0, 0, 1 });
     scene.setCamera (cam);
 
-    scene.groundColor = glm::vec3(86, 156, 12)/255.0f;
-    scene.skyColor    = glm::vec3(43, 168, 240)/255.0f;
-    scene.lightColor  = glm::vec3(1.0f, 1.0f, 1.0f);
+    scene.groundColor = glm::vec3 (86, 156, 12) / 255.0f;
+    scene.skyColor    = glm::vec3 (43, 168, 240) / 255.0f;
+    scene.lightColor  = glm::vec3 (1.0f, 1.0f, 1.0f);
     scene.lightDir    = { 0.2f, 1.0f, 0.2f };
 
     InputManager inputs (window);
@@ -145,7 +142,7 @@ int main () {
         std::chrono::duration<float> (currentTime - lastTime).count (); // in seconds
         lastTime = currentTime;
         elapsedTime += deltaTime;
-        //Debug::Log(std::to_string(1/deltaTime));
+        // Debug::Log(std::to_string(1/deltaTime));
         float speed = 3;
 
         if (inputs.isPressed (GLFW_KEY_W)) {
@@ -165,7 +162,8 @@ int main () {
         }
 
         cam.transform.rotate ({ 0, 1, 0 }, -inputs.getMouseDisplacement ().x * deltaTime);
-        cam.transform.rotate(cam.transform.right(), -inputs.getMouseDisplacement().y * deltaTime);
+        cam.transform.rotate (cam.transform.right (),
+                              -inputs.getMouseDisplacement ().y * deltaTime);
         renderScene (renderer, scene);
         renderer.drawFrame ();
 

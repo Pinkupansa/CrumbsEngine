@@ -66,7 +66,8 @@ class VulkanSwapchain {
         for(int i = 0; i < swapchainImages.size(); i++){
             msaaColorImages[i] = createImage(device, surface.getCapabilities().currentExtent, DEFAULT_COLOR_FORMAT, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, false, "MSAA Color " + std::to_string(i));
-            msaaColorMemories[i] = allocateAndBindImageMemory(device, msaaColorImages[i]);
+          transitionImageLayout(device,  msaaColorImages[i], DEFAULT_COLOR_FORMAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);  
+          msaaColorMemories[i] = allocateAndBindImageMemory(device, msaaColorImages[i]);
             msaaColorImageViews[i] = createColorImageView(device, msaaColorImages[i], "MSAA Color Image View " + std::to_string(i));
         }
         // 2. Create image views
@@ -129,6 +130,7 @@ class VulkanSwapchain {
     }
 
     void destroy () {
+        syncObjects.destroy();
         for (int i = 0; i < swapchainImageViews.size (); i++) {
             if (swapchainImageViews[i] != VK_NULL_HANDLE) {
                 vkDestroyImageView (pDevice.getDevice (), swapchainImageViews[i], nullptr);

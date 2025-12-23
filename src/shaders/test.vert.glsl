@@ -29,7 +29,6 @@ layout(set = 0, binding = 0) uniform SceneUBO {
 // Per-object UBO (set = 1, dynamic)
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4 model;
-    int textureIndex;
 } object;
 
 

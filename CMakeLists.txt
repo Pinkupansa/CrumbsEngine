@@ -41,6 +41,7 @@ target_link_libraries(vulkan_test PRIVATE
 set(SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/src/shaders")
 set(SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/shaders")
 
+
 file(GLOB FRAG_SHADERS "${SHADER_SRC_DIR}/*.frag.glsl")
 file(GLOB VERT_SHADERS "${SHADER_SRC_DIR}/*.vert.glsl")
 # Create output folder
@@ -65,12 +66,14 @@ endforeach()
 foreach(SHADER ${FRAG_SHADERS})
     get_filename_component(BASENAME ${SHADER} NAME_WE)
     set(SPIRV "${SHADER_OUT_DIR}/${BASENAME}.frag.spv")
+    set(REFLECT "${SHADER_OUT_DIR}/${BASENAME}.frag.json")
 
     add_custom_command(
-        OUTPUT ${SPIRV}
-        COMMAND glslc -fshader-stage=fragment "${SHADER}" -o "${SPIRV}" 
+        OUTPUT ${SPIRV} ${REFLECT}
+        COMMAND glslc -fshader-stage=fragment "${SHADER}" -o "${SPIRV}"
+        COMMAND spirv-cross "${SPIRV}" --reflect --output "${REFLECT}"
         DEPENDS "${SHADER}"
-        COMMENT "Compiling fragment shader ${BASENAME}"
+        COMMENT "Compiling + reflecting fragment shader ${BASENAME}"
         VERBATIM
     )
 
