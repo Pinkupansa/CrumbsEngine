@@ -234,19 +234,15 @@ class VulkanRenderer {
 
         swapchain.updateFrameIndex ();
 
-        // dummy draw for first render pass not to be empty which would not signal the renderFinishedSemaphore
-        addMeshDrawCall (0, flexibleBufferPerFragShader[0]->getDefaultObject (),
-                         0, glm::scale (glm::mat4 (1.0f), glm::vec3 (0)), false);
-
         for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
-            if (flexibleBufferPerFragShader[i]->isEmpty ()) {
-                continue;
+            if (!flexibleBufferPerFragShader[i]->isEmpty ()) {
+                std::vector<uint8_t> paddedUBOsForShader =
+                padUBOData (ubosPerFragShader[i], uboAlignedSize);
+                objectsUBPerFragShader[i]->update (paddedUBOsForShader.data (),
+                                                paddedUBOsForShader.size (), 0);
+                flexibleBufferPerFragShader[i]->pushToGPU ();
             }
-            std::vector<uint8_t> paddedUBOsForShader =
-            padUBOData (ubosPerFragShader[i], uboAlignedSize);
-            objectsUBPerFragShader[i]->update (paddedUBOsForShader.data (),
-                                               paddedUBOsForShader.size (), 0);
-            flexibleBufferPerFragShader[i]->pushToGPU ();
+            
             swapchain.drawWithDrawer (*imageDrawersPerFragShader[i],
                                       vertexBuffer, indexBuffer, meshPool, i == 0,
                                       drawCallMeshIndicesPerFragShader[i]);
