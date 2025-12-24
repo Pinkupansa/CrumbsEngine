@@ -550,12 +550,12 @@ createPipelineLayout (const VulkanDevice& device,
     return layout;
 }
 
-VkPipelineDepthStencilStateCreateInfo createDefaultDepthStencilInfo (VkCompareOp depthCompareOp) {
+VkPipelineDepthStencilStateCreateInfo createDepthStencilInfo (bool enableDepthTest, bool enableDepthWrite) {
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable  = VK_TRUE; // enable depth test
-    depthStencil.depthWriteEnable = VK_TRUE; // enable writing to depth buffer
-    depthStencil.depthCompareOp   = depthCompareOp; // standard depth test
+    depthStencil.depthTestEnable  = enableDepthTest; // enable depth test
+    depthStencil.depthWriteEnable = enableDepthWrite; // enable writing to depth buffer
+    depthStencil.depthCompareOp   = VK_COMPARE_OP_LESS; // standard depth test
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable     = VK_FALSE;
     return depthStencil;

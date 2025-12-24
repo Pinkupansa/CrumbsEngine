@@ -135,7 +135,7 @@ class VulkanRenderer {
       shadowView (device, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEFAULT_SHADOW_FORMAT),
       shadowImageDrawer (device,
                          shadowView.getExtent (),
-                         shadowView.getAttachmentsPerImage (),
+                         shadowView.getAttachmentsPerFrameBuffer (),
                          { sceneDataUBDescriptor.getDescData (0, 0),
                            allObjectsUBDescriptor.getDescData (0, 1) },
                          {},
@@ -144,7 +144,8 @@ class VulkanRenderer {
                          { shadowShaderPath },
                          {},
                          VK_CULL_MODE_NONE,
-                         VK_COMPARE_OP_LESS,
+                         true,
+                         true,
                          "Shadow Image Drawer")
     /*TODO : Create instead one image drawer per fragShader, and one objectsUB per shader ?*/ {
         std::cout << "Vertex buffer size: " << MAX_VERTEX_NUMBER * vertexSize << std::endl;
@@ -247,8 +248,6 @@ class VulkanRenderer {
                                       vertexBuffer, indexBuffer, meshPool, i == 0,
                                       drawCallMeshIndicesPerFragShader[i]);
         }
-        // swapchain.drawWithDrawer (mainImageDrawer, vertexBuffer, indexBuffer,
-        //   meshPool, drawCallMeshIndices);
 
         swapchain.present ();
 
@@ -297,7 +296,7 @@ class VulkanRenderer {
 
         VulkanImageDrawer* shaderDrawer = new VulkanImageDrawer (
         device, mainSurface.getCapabilities ().currentExtent,
-        swapchain.getAttachmentsPerImage (),
+        swapchain.getAttachmentsPerFrameBuffer (),
         { sceneDataUBDescriptor.getDescData (0, 0),
           objectsUBDescriptorPerFragShader.back ()->getDescData (0, 1),
           shadowView.getDescData (0, 2), textureBundle.getDescData (0, 3),
@@ -309,7 +308,7 @@ class VulkanRenderer {
         { createColorAttachment (true, loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR) },
         { vertShaderPath }, { spvPath },
 
-        VK_CULL_MODE_BACK_BIT, compareOp, "Shader " + filePath);
+        VK_CULL_MODE_BACK_BIT, true, true, "Shader " + filePath);
 
         imageDrawersPerFragShader.push_back (shaderDrawer);
 

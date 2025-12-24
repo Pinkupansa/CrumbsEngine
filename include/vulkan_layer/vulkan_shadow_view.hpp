@@ -7,10 +7,9 @@
 class VulkanShadowView {
     private:
     VulkanDevice& pDevice;
-    VkImage shadowImage;
-    VkImageView shadowImageView;
-    VkExtent2D extent;
-    VkDeviceMemory shadowMemory;
+    
+    VulkanAttachment shadowAttachment;
+    
     VkSampler shadowSampler;
     VkDescriptorSetLayout shadowDescLayout;
     VkDescriptorPool shadowDescPool;
@@ -18,15 +17,11 @@ class VulkanShadowView {
     VulkanSyncObjects syncObjects;
 
     public:
-    VkImage getShadowImage () {
-        return shadowImage;
+
+    std::vector<std::vector<VulkanAttachment>> getAttachmentsPerFrameBuffer () {
+        return { { shadowAttachment } };
     }
-    std::vector<std::vector<VkImageView>> getAttachmentsPerImage () {
-        return { { shadowImageView } };
-    }
-    VkExtent2D getExtent () {
-        return extent;
-    }
+
 
     const VulkanDescriptorData getDescData (int binding, int set) const {
         return { shadowDescSet,

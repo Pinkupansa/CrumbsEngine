@@ -2,13 +2,14 @@
 
 ## Vulkan Layer
 - Comments
-- Shader change support
 - Raytracing ? 
 - OS Support
 - Gizmos support
 - Billboards 
 - Sort non shadow objects 
 - Transparency
+- split swapchain/shadow view into render target and "sampled texture"? 
+- rewrite syncobjects which is currently tailored for the swapchain
 ## Engine Layer
 ### Graphics Engine
 

@@ -15,7 +15,7 @@ takes in the shaders and a vector of vectors of imageviews (attachments)
 class VulkanImageDrawer {
     private:
     const VulkanDevice& pDevice;
-    const std::vector<VulkanDescriptorData> pDescriptors;
+    const std::vector<VulkanDescriptorData> descriptors;
     VkExtent2D imageExtent;
 
     VulkanRenderPass renderPass;
@@ -26,22 +26,23 @@ class VulkanImageDrawer {
     VulkanCommandBuffers commandBuffers;
     std::vector<VkPipelineStageFlags> waitStages{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
+    bool isFirstPass;
    
     public:
     VulkanImageDrawer (const VulkanDevice& device,
                        VkExtent2D extent,
-                       const std::vector<std::vector<VkImageView>>& attachments,
-                       const std::vector<VulkanDescriptorData> descriptors,
-                       std::vector<VkAttachmentDescription> colorAttachmentDescs,
-                       std::vector<VkAttachmentDescription> depthAttachmentDescs,
-                       std::vector<VkAttachmentDescription> resolveAttachmentDescs,
+                       const std::vector<std::vector<VulkanAttachment>>& attachmentsPerFramebuffer,
+                       bool isFirstPass,
+                       const std::vector<VulkanDescriptorData>& descriptors,
                        std::vector<std::string> vertShaderPaths,
                        std::vector<std::string> fragShaderPaths,
                        VkCullModeFlagBits cullMode,
-                       VkCompareOp depthCompareOp,
+                       
+                       bool enableDepthTest,
+                       bool enableDepthWrite,
                        std::string name)
-    : pDevice (device), pDescriptors (descriptors),
-      renderPass (device, colorAttachmentDescs, depthAttachmentDescs, resolveAttachmentDescs),
+    : pDevice (device), descriptors (descriptors),
+      renderPass (device, attachmentsPerFramebuffer[0], isFirstPass),
       imageExtent (extent), graphicsPipeline (device,
                                               renderPass,
                                               extent,
@@ -49,9 +50,10 @@ class VulkanImageDrawer {
                                               vertShaderPaths,
                                               fragShaderPaths,
                                               cullMode,
-                                              depthCompareOp,
+                                              enableDepthTest,
+                                              enableDepthWrite,
                                               name + " Pipeline"),
-      framebuffers (device, renderPass, attachments, extent, name + " Framebuffers"),
+      framebuffers (device, renderPass, attachmentsPerFramebuffer, name + " Framebuffers"),
       commandBuffers (device, framebuffers) {
     }
 
@@ -63,12 +65,11 @@ class VulkanImageDrawer {
                const VulkanSyncObjects& syncObjects,
                bool useWaitSem,
                bool useSigSem,
-               bool isFirstPass,
                int syncIndex,
                uint32_t imageIndex) {
         // record command buffer for this image
         commandBuffers.record (imageExtent, renderPass, framebuffers, vertexBuffer,
-                               indexBuffer, pDescriptors, graphicsPipeline,
+                               indexBuffer, descriptors, graphicsPipeline,
                                meshPool, drawCallMeshIndices, imageIndex);
 
         // submit

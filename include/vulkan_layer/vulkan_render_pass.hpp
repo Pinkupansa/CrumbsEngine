@@ -10,6 +10,7 @@ class VulkanRenderPass {
 
     std::vector<VkClearValue> clearValues;
     bool hasResolve;
+    bool isFirstPass;
     public:
     std::vector<VkClearValue> getClearValues () const {
         return clearValues;
@@ -21,37 +22,62 @@ class VulkanRenderPass {
     const bool hasResolveAttachment() const{ //used to set nRasterizationSamples in pipeline
         return hasResolve;
     }
+
+    VkAttachmentLoadOp getLoadOp(){
+        return isFirstPass? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+    }
     VulkanRenderPass (const VulkanDevice& device,
-                      std::vector<VkAttachmentDescription> colorAttachments,
-                      std::vector<VkAttachmentDescription> depthAttachments,
-                      std::vector<VkAttachmentDescription> resolveAttachments)
+                      const std::vector<VulkanAttachment>& attachments, 
+                      bool isFirstPass)
     : pDevice (device) {
+
+        std::vector<VkAttachmentDescription> colorAttachmentDescs;
+        std::vector<VkAttachmentDescription> depthAttachmentDescs;
+        std::vector<VkAttachmentDescription> resolveAttachmentDescs;
+
+        for(auto& attachment : attachments){
+            VkAttachmentDescription desc = attachment.createAttachmentDesc(getLoadOp());
+            switch(attachment.getType()){
+                case VulkanAttachmentType::Color:
+                    if(attachment.isColorResolveAttachment()){
+                        resolveAttachmentDescs.push_back(desc);
+                    }
+                    else{
+                        colorAttachmentDescs.push_back(desc);
+                    }
+                    break;
+                case VulkanAttachmentType::Depth:
+                    depthAttachmentDescs.push_back(desc);
+                    break;
+            }
+        }
+
         int attachmentCount = 0;
-        hasResolve = resolveAttachments.size() > 0;
-        for(int i = 0; i < colorAttachments.size(); i++){
+        hasResolve = resolveAttachmentDescs.size() > 0;
+        for(int i = 0; i < colorAttachmentDescs.size(); i++){
             clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
         }
 
-        for(int i = 0; i < depthAttachments.size(); i++){
+        for(int i = 0; i < depthAttachmentDescs.size(); i++){
             clearValues.push_back(createDepthClearValue({1.0f, 0}));
         }
-        for(int i = 0; i < resolveAttachments.size(); i++){
+        for(int i = 0; i < resolveAttachmentDescs.size(); i++){
             clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
         }
         std::vector<VkAttachmentReference> colorAttachmentsRefs;
-        for (VkAttachmentDescription cAtt : colorAttachments) {
+        for (VkAttachmentDescription cAtt : colorAttachmentDescs) {
             colorAttachmentsRefs.push_back (createColorAttachmentRef (attachmentCount));
             attachmentCount++;
         }
 
         std::vector<VkAttachmentReference> depthAttachmentsRefs;
-        for (VkAttachmentDescription dAtt : depthAttachments) {
+        for (VkAttachmentDescription dAtt : depthAttachmentDescs) {
             depthAttachmentsRefs.push_back (createDepthAttachmentRef (attachmentCount));
             attachmentCount++;
         }
 
         std::vector<VkAttachmentReference> resolveAttachmentsRefs;
-        for (VkAttachmentDescription rAtt : depthAttachments) {
+        for (VkAttachmentDescription rAtt : depthAttachmentDescs) {
             resolveAttachmentsRefs.push_back (createColorAttachmentRef (attachmentCount));
             attachmentCount++;
         }
@@ -62,16 +88,16 @@ class VulkanRenderPass {
         subpass.pDepthStencilAttachment = depthAttachmentsRefs.data ();
         subpass.pResolveAttachments     = resolveAttachmentsRefs.data ();
 
-        std::vector<VkAttachmentDescription> attachments = colorAttachments;
-        attachments.insert (attachments.end (), depthAttachments.begin (),
-                            depthAttachments.end ());
-        attachments.insert (attachments.end (), resolveAttachments.begin (),
-                            resolveAttachments.end ());
+        std::vector<VkAttachmentDescription> attachmentDescs = colorAttachmentDescs;
+        attachmentDescs.insert (attachmentDescs.end (), depthAttachmentDescs.begin (),
+                            depthAttachmentDescs.end ());
+        attachmentDescs.insert (attachmentDescs.end (), resolveAttachmentDescs.begin (),
+                            resolveAttachmentDescs.end ());
 
         VkRenderPassCreateInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = attachments.size ();
-        renderPassInfo.pAttachments    = attachments.data ();
+        renderPassInfo.attachmentCount = attachmentDescs.size ();
+        renderPassInfo.pAttachments    = attachmentDescs.data ();
         renderPassInfo.subpassCount    = 1;
         renderPassInfo.pSubpasses      = &subpass;
 

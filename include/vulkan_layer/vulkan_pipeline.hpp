@@ -48,7 +48,8 @@ class VulkanPipeline {
                     const std::vector<std::string>& vertPaths,
                     const std::vector<std::string>& fragPaths,
                     VkCullModeFlagBits cullMode,
-                    VkCompareOp depthCompareOp,
+                    bool enableDepthTest,
+                    bool enableDepthWrite,
                     std::string name)
     : pDevice (device) {
 
@@ -107,7 +108,7 @@ class VulkanPipeline {
         pipelineLayout = createPipelineLayout (device, descLayouts, {}, name + " Layout");
 
         VkPipelineDepthStencilStateCreateInfo depthStencil =
-        createDefaultDepthStencilInfo (depthCompareOp);
+        createDepthStencilInfo (enableDepthTest, enableDepthWrite);
 
         pipeline = createPipeline (device, shaderStages, vertexInputInfo,
                                    inputAssembly, viewportStateInfo, rasterizerInfo,
