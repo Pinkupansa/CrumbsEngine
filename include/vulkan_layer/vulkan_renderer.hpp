@@ -8,7 +8,7 @@
 #include "vulkan_image_drawer.hpp"
 #include "vulkan_mesh_draw_info.hpp"
 #include "vulkan_scene_ubo.hpp"
-#include "vulkan_shadow_view.hpp"
+#include "vulkan_shadow_map.hpp"
 #include "vulkan_swapchain.hpp"
 #include "vulkan_texture_bundle.hpp"
 #include "vulkan_ubo.hpp"
@@ -58,7 +58,7 @@ class VulkanRenderer {
     VulkanUBDescriptor allObjectsUBDescriptor;
     VulkanUBDescriptor sceneDataUBDescriptor;
 
-    VulkanShadowView shadowView;
+    VulkanShadowMap shadowView;
     VulkanImageDrawer shadowImageDrawer;
 
     // use heap because created when loading shader and hold references to VkObjects that are destroyed if the object is destroyed
@@ -298,7 +298,7 @@ class VulkanRenderer {
         !loadedFirstDrawer,
         { sceneDataUBDescriptor.getDescData (0, 0),
           objectsUBDescriptorPerFragShader.back ()->getDescData (0, 1),
-          shadowView.getDescData (0, 2), textureBundle.getDescData (0, 3),
+          shadowView.getTextureSampler().getDescData (0, 2), textureBundle.getDescData (0, 3),
           customUBDescForShader->getDescData (0, DEFAULT_CUSTOM_FRAG_PROPERTIES_SET_NUMBER) },
         { vertShaderPath }, { spvPath },
         VK_CULL_MODE_BACK_BIT, true, true, "Shader " + filePath);

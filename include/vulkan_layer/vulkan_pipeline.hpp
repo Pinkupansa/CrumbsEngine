@@ -7,6 +7,7 @@
 #include <string>
 #include <vulkan/vulkan.h>
 #include "vulkan_descriptor_data.hpp"
+
 std::vector<char> readFile (const std::string& filename) {
     std::ifstream file (filename, std::ios::ate | std::ios::binary);
 
@@ -19,7 +20,7 @@ std::vector<char> readFile (const std::string& filename) {
 
     file.seekg (0);
     file.read (buffer.data (), fileSize);
-
+    
     file.close ();
     return buffer;
 }
