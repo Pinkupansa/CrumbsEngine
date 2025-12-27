@@ -17,21 +17,21 @@ class VulkanFramebuffers {
 
     VulkanFramebuffers (const VulkanDevice& dev,
                         const VulkanRenderPass& rp,
-                        const std::vector<std::vector<VulkanAttachment>>& attachmentsPerFramebuffers,
+                        const std::vector<std::vector<VulkanAttachment*>>& attachmentsPerFramebuffers,
                         std::string name)
     : device (dev) {
 
         framebuffers.resize (attachmentsPerFramebuffers.size ());
 
         for (size_t i = 0; i < framebuffers.size (); ++i) {
-            std::vector<VulkanAttachment> attachments = attachmentsPerFramebuffers[i];
+            std::vector<VulkanAttachment*> attachments = attachmentsPerFramebuffers[i];
             std::vector<VkImageView> imageViews; 
             for(auto& attachment : attachments){
-                imageViews.push_back(attachment.getImageView());
+                imageViews.push_back(attachment->getImageView());
             }
             //all attachments should have same extent
             framebuffers[i] =
-            createFramebuffer (device, rp.getRenderPass (), imageViews, attachments[0].getExtent(), name);
+            createFramebuffer (device, rp.getRenderPass (), imageViews, attachments[0]->getExtent(), name);
         }
     }
 

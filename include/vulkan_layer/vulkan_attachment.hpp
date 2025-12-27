@@ -3,7 +3,7 @@
 #include "vulkan_object_creation_utils.hpp"
 #include "vulkan_sync_objects.hpp"
 #include <vulkan/vulkan.h>
-enum VulkanAttachmentType { Depth, Color };
+enum VulkanAttachmentType { Depth, Color, ShadowMap };
 
 class VulkanAttachment {
 
@@ -44,7 +44,11 @@ class VulkanAttachment {
 
         case VulkanAttachmentType::Depth:
             return createDepthAttachment(loadOp);
+        
+        case VulkanAttachmentType::ShadowMap:
+            return createShadowDepthAttachment(loadOp);
         }
+        
     }
     VkExtent2D getExtent () const {
         return extent;
@@ -53,7 +57,6 @@ class VulkanAttachment {
 
     VulkanAttachment (const VulkanDevice& device,
                       VulkanAttachmentType type,
-                      VkImageUsageType imageUsage,
                       VkExtent2D extent,
                       bool isResolve,
                       std::string name)
@@ -62,14 +65,23 @@ class VulkanAttachment {
         switch (type) {
         case VulkanAttachmentType::Color:
             image = createColorImage (device, extent, isResolve, name + " Color Image");
-            imageView = createColorImageView (device, image, name + " Color Image View");
             memory                = allocateAndBindImageMemory (device, image);
+            imageView = createColorImageView (device, image, name + " Color Image View");
+
 
             break;
         case VulkanAttachmentType::Depth:
+            
             image = createDepthImage (device, extent, isResolve, name + " Depth Image");
-            imageView = createDepthImageView (device, image, name + " Depth Image View");
             memory                = allocateAndBindImageMemory (device, image);
+            imageView = createDepthImageView (device, image, name + " Depth Image View");
+
+            break;
+        case VulkanAttachmentType::ShadowMap:
+            image = createImage (device, extent, DEFAULT_SHADOW_FORMAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, true, name + " Depth Image");
+            memory                = allocateAndBindImageMemory (device, image); 
+            imageView = createDepthImageView (device, image, name + " Depth Image View");
 
             break;
         }
@@ -83,12 +95,16 @@ class VulkanAttachment {
                       std::string name)
     : device (device), type(type), image (image), extent (extent), isImageCreator (false),
       isResolve (isResolve) {
+        
         // used for swapchain images
         switch (type) {
         case VulkanAttachmentType::Color:
             imageView = createColorImageView (device, image, name + " Color Image View");
             break;
         case VulkanAttachmentType::Depth:
+            imageView = createDepthImageView (device, image, name + " Depth Image View");
+            break;
+        case VulkanAttachmentType::ShadowMap:
             imageView = createDepthImageView (device, image, name + " Depth Image View");
             break;
         }

@@ -13,9 +13,11 @@ class VulkanSwapchain {
     
 
     std::vector<VkImage> swapchainImages;
-    std::vector<VulkanAttachment> swapchainAttachments;
+    std::vector<VulkanAttachment*> swapchainAttachments;
 
-    std::vector<VulkanAttachment> msaaColorAttachments;
+    std::vector<VulkanAttachment*> msaaColorAttachments;
+
+    VulkanAttachment* depthAttachment; 
     VulkanSyncObjects syncObjects; 
 
     uint32_t currentFrame;
@@ -28,10 +30,10 @@ class VulkanSwapchain {
     }
  
 
-    std::vector<std::vector<VulkanAttachment>> getAttachmentsPerFrameBuffer () {
-        return { { msaaColorAttachments[0], swapchainAttachments [0]},
-                 { msaaColorAttachments[1], swapchainAttachments [1]},
-                 { msaaColorAttachments[2], swapchainAttachments [2]}};
+    std::vector<std::vector<VulkanAttachment*>> getAttachmentsPerFrameBuffer () {
+        return { { msaaColorAttachments[0], depthAttachment, swapchainAttachments [0]},
+                 { msaaColorAttachments[1], depthAttachment, swapchainAttachments [1]},
+                 { msaaColorAttachments[2], depthAttachment, swapchainAttachments [2]}};
     }
     VulkanSwapchain (VulkanDevice& device, VulkanSurface& surface)
     : pDevice (device), syncObjects(device, 3) {
@@ -49,18 +51,18 @@ class VulkanSwapchain {
                                  swapchainImages.data ());
 
 
-        msaaColorAttachments.resize(imageCount);
-        for(int i = 0; i < swapchainImages.size(); i++){
-            VulkanAttachment msaaColorAttachment(device, VulkanAttachmentType::Color, surface.getCapabilities().currentExtent, false, "MSAA Color Attachment " + std::to_string(i));
+        for(int i = 0; i < imageCount; i++){
+            VulkanAttachment* msaaColorAttachment = new VulkanAttachment(device, VulkanAttachmentType::Color, surface.getCapabilities().currentExtent, false, "MSAA Color Attachment " + std::to_string(i));
             msaaColorAttachments.push_back(msaaColorAttachment);
         }
 
         // 2. Create image views
-        swapchainAttachments.resize(imageCount);
         for (int i = 0; i < imageCount; i++) {
-            VulkanAttachment swapchainAttachment(device, VulkanAttachmentType::Color, swapchainImages[i], surface.getCapabilities().currentExtent, true, "Swapchain Attachment " + std::to_string(i));
+            VulkanAttachment* swapchainAttachment = new VulkanAttachment(device, VulkanAttachmentType::Color, swapchainImages[i], surface.getCapabilities().currentExtent, true, "Swapchain Attachment " + std::to_string(i));
             swapchainAttachments.push_back(swapchainAttachment);
         }
+
+        depthAttachment = new VulkanAttachment(device, VulkanAttachmentType::Depth, surface.getCapabilities().currentExtent, false, "Main Depth Attachment ");
 
         currentFrame = 0;
         currentSyncIndex = 0;
@@ -99,10 +101,9 @@ class VulkanSwapchain {
                          const VulkanBuffer& vertexBuffer,
                          const VulkanBuffer& indexBuffer,
                          const std::vector<MeshDrawInfo>& meshPool,
-                         bool isFirstPass,
                          const std::vector<uint32_t>& drawCallMeshIndices) {
         waitAndResetFences ();
-        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices, syncObjects, true, true, isFirstPass, currentSyncIndex, currentFrame);
+        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices, syncObjects, true, true, currentSyncIndex, currentFrame);
     }
     ~VulkanSwapchain () {
         destroy ();
@@ -112,9 +113,22 @@ class VulkanSwapchain {
         syncObjects.destroy();
         
         for(int i = 0; i < swapchainImages.size(); i++){
-            swapchainAttachments[i].destroy();
-            msaaColorAttachments[i].destroy();
+            swapchainAttachments[i]->destroy();
+            delete swapchainAttachments[i];
+
+            msaaColorAttachments[i]->destroy();
+            delete msaaColorAttachments[i];
         }
+
+        if(depthAttachment != nullptr){
+            depthAttachment->destroy();
+            delete depthAttachment;
+            depthAttachment = nullptr;
+        }
+
+        swapchainAttachments.clear();
+        msaaColorAttachments.clear();
+        swapchainImages.clear();
         if (swapchain != VK_NULL_HANDLE) {
             vkDestroySwapchainKHR (pDevice.getDevice (), swapchain, nullptr);
             swapchain = VK_NULL_HANDLE;

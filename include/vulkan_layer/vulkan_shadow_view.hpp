@@ -7,9 +7,9 @@
 class VulkanShadowView {
     private:
     VulkanDevice& pDevice;
-    
+
     VulkanAttachment shadowAttachment;
-    
+
     VkSampler shadowSampler;
     VkDescriptorSetLayout shadowDescLayout;
     VkDescriptorPool shadowDescPool;
@@ -17,11 +17,13 @@ class VulkanShadowView {
     VulkanSyncObjects syncObjects;
 
     public:
-
-    std::vector<std::vector<VulkanAttachment>> getAttachmentsPerFrameBuffer () {
-        return { { shadowAttachment } };
+    std::vector<std::vector<VulkanAttachment*>> getAttachmentsPerFrameBuffer () {
+        return { { &shadowAttachment } };
     }
-
+    
+    VulkanAttachment* getShadowAttachment (){
+        return &shadowAttachment;
+    }
 
     const VulkanDescriptorData getDescData (int binding, int set) const {
         return { shadowDescSet,
@@ -40,17 +42,12 @@ class VulkanShadowView {
         return shadowDescLayout;
     }
     VulkanShadowView (VulkanDevice& device, uint width, uint height, VkFormat format)
-    : pDevice (device), syncObjects (device, 1, "Shadow Sync ") {
-        extent      = { width, height };
-        shadowImage = createImage (device, extent, format,
-                                   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                   VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                   true, "Shadow Image");
-
-        shadowMemory = allocateAndBindImageMemory (device, shadowImage);
-
-        shadowImageView = createImageView (device, shadowImage, format,
-                                           VK_IMAGE_ASPECT_DEPTH_BIT, "Shadow Image View");
+    : pDevice (device), syncObjects (device, 1, "Shadow Sync "),
+      shadowAttachment (device,
+                        VulkanAttachmentType::ShadowMap,
+                        { width, height },
+                        true,
+                        "Shadow Attachment ") {
 
         // Create a sampler for sampling the shadow map in the fragment shader
 
@@ -66,7 +63,7 @@ class VulkanShadowView {
         shadowDescSet = allocateDescriptorSet (device, shadowDescLayout, shadowDescPool,
                                                "Shadow Descriptor Set");
 
-        writeImageSamplerInDescriptorSet (device, shadowImageView, shadowSampler, shadowDescSet);
+        writeImageSamplerInDescriptorSet (device, shadowAttachment.getImageView(), shadowSampler, shadowDescSet);
     }
     ~VulkanShadowView () {
         destroy ();
@@ -85,11 +82,11 @@ class VulkanShadowView {
                          const std::vector<uint32_t>& drawCallMeshIndices) {
 
         waitAndResetFences ();
-        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool,
-                          drawCallMeshIndices, syncObjects, false, false, true, 0, 0);
+        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices,
+                          syncObjects, false, false, 0, 0);
     }
     void destroy () {
-        syncObjects.destroy();
+        syncObjects.destroy ();
         if (shadowDescLayout != VK_NULL_HANDLE) {
             vkDestroyDescriptorSetLayout (pDevice.getDevice (), shadowDescLayout, nullptr);
             shadowDescLayout = VK_NULL_HANDLE;
@@ -111,17 +108,6 @@ class VulkanShadowView {
             vkDestroySampler (pDevice.getDevice (), shadowSampler, nullptr);
             shadowSampler = VK_NULL_HANDLE;
         }
-        if (shadowMemory != VK_NULL_HANDLE) {
-            vkFreeMemory (pDevice.getDevice (), shadowMemory, nullptr);
-            shadowMemory = VK_NULL_HANDLE;
-        }
-        if (shadowImage != VK_NULL_HANDLE) {
-            vkDestroyImage (pDevice.getDevice (), shadowImage, nullptr);
-            shadowImage = VK_NULL_HANDLE;
-        }
-        if (shadowImageView != VK_NULL_HANDLE) {
-            vkDestroyImageView (pDevice.getDevice (), shadowImageView, nullptr);
-            shadowImageView = VK_NULL_HANDLE;
-        }
+        shadowAttachment.destroy();
     }
 };

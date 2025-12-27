@@ -34,3 +34,6 @@ layout(set = 4, binding = 0) uniform CustomObjectUBO {
     vec4 color;
 } customProps;
 
+void main() {
+    
+}

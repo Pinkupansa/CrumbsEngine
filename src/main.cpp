@@ -47,6 +47,8 @@ int main () {
 
     VulkanRenderer renderer (window, width, height);
 
+    Mesh portalgunMesh          = loadOBJShared ("portalgun.obj");
+    uint32_t portalGunMeshIndex = renderer.loadMesh (portalgunMesh);
 
     Mesh quadMesh      = generateQuad ();
     uint32_t quadIndex = renderer.loadMesh (quadMesh);
@@ -72,29 +74,52 @@ int main () {
     // load all texture in the texture folder
     //  go through all files in the textures/ directory
 
-    int grassIndex       = renderer.loadTexture ("textures/grass3.jpg");
+    int grassIndex       = renderer.loadTexture ("textures/portalfloor.png");
     int grassNormalIndex = renderer.loadTexture ("textures/grass3_normal.jpg");
     int rockwallTexIndex =
     renderer.loadTexture ("textures/cottage_diffuse.png");
-    int brickTexIndex = renderer.loadTexture ("textures/rockwall.jpg");
+
+    int portalgunTexIndex = renderer.loadTexture ("textures/portalgun_col.jpg");
+    int portalgunNormalInex =
+    renderer.loadTexture ("textures/portalgun_nor.jpg");
+
     int stonewallNormalMapIndex =
     renderer.loadTexture ("textures/cottage_normal.png");
 
     int skyboxTexture = renderer.loadTexture ("textures/sky2.jpg");
     int dragonTexture =
     renderer.loadTexture ("textures/Dragon_ground_color.jpg");
+
+
     renderer.buildTextureAtlas ();
 
     int litShaderIndex = renderer.loadShader ("shaders/lit.frag", VK_COMPARE_OP_LESS);
     int unlitShaderIndex = renderer.loadShader ("shaders/unlit.frag", VK_COMPARE_OP_LESS);
 
+    Material mPortal (litShaderIndex);
+    mPortal.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (portalgunTexIndex));
+    mPortal.setProperty ("relativeTextureSize",
+                         renderer.getRelativeTextureSize (portalgunTexIndex));
+    mPortal.setProperty ("normalmapAtlasOffset",
+                         renderer.getRelativeTextureSize (portalgunNormalInex));
+    mPortal.setProperty ("normalmapRelativeTextureSize",
+                         renderer.getRelativeTextureSize (portalgunNormalInex));
+    mPortal.setProperty ("tilingFactor", glm::vec2 (1.0f));
+    mPortal.setProperty("specularity", 1.5f);
+    RenderData portalGunRenderData (portalGunMeshIndex, mPortal);
+    Crumb portalGun (portalGunRenderData);
+    portalGun.transform.position = { 0, 0.1f, 0 };
+    portalGun.transform.scaleByFactor(glm::vec3(0.5f));
+
 
     Material m (litShaderIndex);
-    m.setProperty("atlasOffset", renderer.getTextureAtlasOffset(rockwallTexIndex));
-    m.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(rockwallTexIndex));
-    m.setProperty("normalmapAtlasOffset", renderer.getTextureAtlasOffset(stonewallNormalMapIndex));
-    m.setProperty("normalmapRelativeTextureSize", renderer.getRelativeTextureSize(stonewallNormalMapIndex));
-    m.setProperty("tilingFactor", glm::vec2(1.0f));
+    m.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (rockwallTexIndex));
+    m.setProperty ("relativeTextureSize", renderer.getRelativeTextureSize (rockwallTexIndex));
+    m.setProperty ("normalmapAtlasOffset",
+                   renderer.getTextureAtlasOffset (stonewallNormalMapIndex));
+    m.setProperty ("normalmapRelativeTextureSize",
+                   renderer.getRelativeTextureSize (stonewallNormalMapIndex));
+    m.setProperty ("tilingFactor", glm::vec2 (1.0f));
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
     sphereObject.transform.position = { 2, -0.5f, -3 };
@@ -102,9 +127,9 @@ int main () {
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
     Material m2 (litShaderIndex);
-    m2.setProperty("atlasOffset", renderer.getTextureAtlasOffset(grassIndex));
-    m2.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(grassIndex));
-    m2.setProperty("tilingFactor", glm::vec2(10.0f));
+    m2.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassIndex));
+    m2.setProperty ("relativeTextureSize", renderer.getRelativeTextureSize (grassIndex));
+    m2.setProperty ("tilingFactor", glm::vec2 (10.0f));
 
     RenderData floorRenderData (quadIndex, m2);
     Crumb floorObject (floorRenderData);
@@ -116,34 +141,36 @@ int main () {
     Mesh skybox     = generateInvertedSphere ();
     int skyboxIndex = renderer.loadMesh (skybox);
     Material m3 (unlitShaderIndex);
-    m3.setProperty("atlasOffset", renderer.getTextureAtlasOffset(skyboxTexture));
-    m3.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(skyboxTexture));
-    m3.setProperty("tilingFactor", glm::vec2(1.0f));
- 
+    m3.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (skyboxTexture));
+    m3.setProperty ("relativeTextureSize", renderer.getRelativeTextureSize (skyboxTexture));
+    m3.setProperty ("tilingFactor", glm::vec2 (1.0f));
+
     RenderData skyRenderData (skyboxIndex, m3, false);
     Crumb skyboxObject (skyRenderData);
-    skyboxObject.transform.scaleByFactor (glm::vec3 (100.0f));
+    skyboxObject.transform.scaleByFactor (glm::vec3 (400.0f));
     skyboxObject.transform.rotate ({ 1, 0, 0 }, 3.14);
 
     Material mDragon (litShaderIndex);
-    mDragon.setProperty("atlasOffset", renderer.getTextureAtlasOffset(dragonTexture));
-    mDragon.setProperty("relativeTextureSize", renderer.getRelativeTextureSize(dragonTexture));
-    mDragon.setProperty("tilingFactor", glm::vec2(1.0f));
+    mDragon.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (dragonTexture));
+    mDragon.setProperty ("relativeTextureSize",
+                         renderer.getRelativeTextureSize (dragonTexture));
+    mDragon.setProperty ("tilingFactor", glm::vec2 (1.0f));
 
-    RenderData dragonRenderData (dragonIndex, mDragon);
+    /*RenderData dragonRenderData (dragonIndex, mDragon);
     Crumb dragonObject (dragonRenderData);
     dragonObject.transform.position = { 0, 2, 0 };
     dragonObject.transform.scaleByFactor (glm::vec3 (0.2f));
     dragonObject.transform.rotate ({ 1, 0, 0 }, 1.57);
     dragonObject.transform.rotate ({ 0, 1, 0 }, 3.14);
-    dragonObject.transform.rotate ({ 0, 0, 1 }, 3.14);
+    dragonObject.transform.rotate ({ 0, 0, 1 }, 3.14);*/
 
 
     Scene scene;
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
     scene.addCrumb (skyboxObject);
-    scene.addCrumb (dragonObject);
+    //scene.addCrumb (dragonObject);
+    scene.addCrumb (portalGun);
     Camera cam ({ 0, 0, 0 }, { 0, 0, 1 });
     scene.setCamera (cam);
 
@@ -159,7 +186,7 @@ int main () {
         std::chrono::duration<float> (currentTime - lastTime).count (); // in seconds
         lastTime = currentTime;
         elapsedTime += deltaTime;
-        // Debug::Log(std::to_string(1/deltaTime));
+        Debug::Log(std::to_string(1/deltaTime));
         float speed = 3;
 
         if (inputs.isPressed (GLFW_KEY_W)) {

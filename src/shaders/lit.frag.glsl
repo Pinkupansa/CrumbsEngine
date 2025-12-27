@@ -36,6 +36,7 @@ layout(set = 4, binding = 0) uniform CustomObjectUBO {
     vec2 normalmapAtlasOffset;
     vec2 normalmapRelativeTextureSize;
     vec2 tilingFactor;
+    float specularity;
 } customProps;
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
@@ -117,7 +118,7 @@ vec3 getLightDir()
 float computeSpecularLight(vec3 N, vec3 L) {
     vec3 camDir = normalize(getCameraPos() - fragWorldPos);
     vec3 R = reflect(-L, N);
-    return pow(max(dot(R, camDir), 0.0), 8.0) * 0.0;
+    return pow(max(dot(R, camDir), 0.0), 8.0) * customProps.specularity;
 }
 float computeDepth(vec4 lightSpacePos)
 {   

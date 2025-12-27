@@ -2,6 +2,7 @@
 #include "vulkan_constants.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_object_creation_utils.hpp"
+#include "vulkan_attachment.hpp"
 #include <vulkan/vulkan.h>
 class VulkanRenderPass {
     private:
@@ -27,19 +28,19 @@ class VulkanRenderPass {
         return isFirstPass? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
     }
     VulkanRenderPass (const VulkanDevice& device,
-                      const std::vector<VulkanAttachment>& attachments, 
+                      const std::vector<VulkanAttachment*>& attachments, 
                       bool isFirstPass)
-    : pDevice (device) {
+    : pDevice (device), isFirstPass(isFirstPass){
 
         std::vector<VkAttachmentDescription> colorAttachmentDescs;
         std::vector<VkAttachmentDescription> depthAttachmentDescs;
         std::vector<VkAttachmentDescription> resolveAttachmentDescs;
 
         for(auto& attachment : attachments){
-            VkAttachmentDescription desc = attachment.createAttachmentDesc(getLoadOp());
-            switch(attachment.getType()){
+            VkAttachmentDescription desc = attachment->createAttachmentDesc(getLoadOp());
+            switch(attachment->getType()){
                 case VulkanAttachmentType::Color:
-                    if(attachment.isColorResolveAttachment()){
+                    if(attachment->isColorResolveAttachment()){
                         resolveAttachmentDescs.push_back(desc);
                     }
                     else{
@@ -47,6 +48,9 @@ class VulkanRenderPass {
                     }
                     break;
                 case VulkanAttachmentType::Depth:
+                    depthAttachmentDescs.push_back(desc);
+                    break;
+                case VulkanAttachmentType::ShadowMap:
                     depthAttachmentDescs.push_back(desc);
                     break;
             }

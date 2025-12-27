@@ -81,6 +81,7 @@ class VulkanRenderer {
     std::vector<VulkanUniformBufferObject> ubos;
 
 
+
     bool loadedFirstDrawer = false; // used to decide which drawer will clean
 
 
@@ -134,13 +135,11 @@ class VulkanRenderer {
                              "Scene UB Descriptor Set"),
       shadowView (device, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEFAULT_SHADOW_FORMAT),
       shadowImageDrawer (device,
-                         shadowView.getExtent (),
+                         shadowView.getShadowAttachment()->getExtent (),
                          shadowView.getAttachmentsPerFrameBuffer (),
+                         true,
                          { sceneDataUBDescriptor.getDescData (0, 0),
                            allObjectsUBDescriptor.getDescData (0, 1) },
-                         {},
-                         { createShadowDepthAttachment () },
-                         {},
                          { shadowShaderPath },
                          {},
                          VK_CULL_MODE_NONE,
@@ -216,7 +215,7 @@ class VulkanRenderer {
         glm::perspective (glm::radians (80.0f),
                           mainSurface.getCapabilities ().currentExtent.width /
                           (float)mainSurface.getCapabilities ().currentExtent.height,
-                          0.1f, 200.0f);
+                          0.1f, 500.0f);
         proj[1][1] *= -1;
         sceneData =
         VulkanSceneUBO (scene.getMainCamera ()->getView (), proj, scene.lightDir,
@@ -245,7 +244,7 @@ class VulkanRenderer {
             }
             
             swapchain.drawWithDrawer (*imageDrawersPerFragShader[i],
-                                      vertexBuffer, indexBuffer, meshPool, i == 0,
+                                      vertexBuffer, indexBuffer, meshPool,
                                       drawCallMeshIndicesPerFragShader[i]);
         }
 
@@ -293,21 +292,15 @@ class VulkanRenderer {
 
         customUBDescriptorPerFragShader.push_back (customUBDescForShader);
 
-
         VulkanImageDrawer* shaderDrawer = new VulkanImageDrawer (
         device, mainSurface.getCapabilities ().currentExtent,
         swapchain.getAttachmentsPerFrameBuffer (),
+        !loadedFirstDrawer,
         { sceneDataUBDescriptor.getDescData (0, 0),
           objectsUBDescriptorPerFragShader.back ()->getDescData (0, 1),
           shadowView.getDescData (0, 2), textureBundle.getDescData (0, 3),
           customUBDescForShader->getDescData (0, DEFAULT_CUSTOM_FRAG_PROPERTIES_SET_NUMBER) },
-
-        { createColorAttachment (false, loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR) },
-        { createDepthAttachment (loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD :
-                                                     VK_ATTACHMENT_LOAD_OP_CLEAR) },
-        { createColorAttachment (true, loadedFirstDrawer ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR) },
         { vertShaderPath }, { spvPath },
-
         VK_CULL_MODE_BACK_BIT, true, true, "Shader " + filePath);
 
         imageDrawersPerFragShader.push_back (shaderDrawer);

@@ -36,16 +36,20 @@ VkImage createImage (const VulkanDevice& device,
     return image;
 }
 
-VkImage
-createColorImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
-    return createImage (device, extent, DEFAULT_COLOR_FORMAT,
-                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, isResolve, name);
+VkImage createColorImage (const VulkanDevice& device,
+                          VkExtent2D extent,
+                          bool isResolve,
+                          std::string name,
+                          VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+    return createImage (device, extent, DEFAULT_COLOR_FORMAT, usage, isResolve, name);
 }
 
-VkImage
-createDepthImage (const VulkanDevice& device, VkExtent2D extent, bool isResolve, std::string name) {
-    return createImage (device, extent, DEFAULT_DEPTH_FORMAT,
-                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, isResolve, name);
+VkImage createDepthImage (const VulkanDevice& device,
+                          VkExtent2D extent,
+                          bool isResolve,
+                          std::string name,
+                          VkImageUsageFlags usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+    return createImage (device, extent, DEFAULT_DEPTH_FORMAT, usage, isResolve, name);
 }
 
 VkImageView createImageView (const VulkanDevice& device,
@@ -201,16 +205,18 @@ VkAttachmentDescription createDepthAttachment (VkAttachmentLoadOp loadOp) {
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     return depthAttachment;
 }
-VkAttachmentDescription createShadowDepthAttachment () {
+VkAttachmentDescription createShadowDepthAttachment (VkAttachmentLoadOp loadOp) {
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = DEFAULT_DEPTH_FORMAT; // the same format as your depth image
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // depth not presented
+    depthAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.loadOp         = loadOp;
+    depthAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
     depthAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depthAttachment.initialLayout  = loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ?
+     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL :
+     VK_IMAGE_LAYOUT_UNDEFINED;
+      depthAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     return depthAttachment;
 }
 VkAttachmentReference createDepthAttachmentRef (int attachmentNumber) {
@@ -550,12 +556,13 @@ createPipelineLayout (const VulkanDevice& device,
     return layout;
 }
 
-VkPipelineDepthStencilStateCreateInfo createDepthStencilInfo (bool enableDepthTest, bool enableDepthWrite) {
+VkPipelineDepthStencilStateCreateInfo
+createDepthStencilInfo (bool enableDepthTest, bool enableDepthWrite) {
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable  = enableDepthTest; // enable depth test
+    depthStencil.depthTestEnable = enableDepthTest; // enable depth test
     depthStencil.depthWriteEnable = enableDepthWrite; // enable writing to depth buffer
-    depthStencil.depthCompareOp   = VK_COMPARE_OP_LESS; // standard depth test
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; // standard depth test
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable     = VK_FALSE;
     return depthStencil;
@@ -813,8 +820,7 @@ void transitionImageLayout (const VulkanDevice& device,
 
         sourceStage      = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    }
-    else {
+    } else {
         throw std::invalid_argument ("Unsupported layout transition!");
     }
 
@@ -1154,11 +1160,21 @@ void createImageAndMipmapsFromFile (const VulkanDevice& device,
     mipmapsPixelArrays[0] = rawPixelsArray;
 
     for (int i = 1; i < nMipmaps; i++) {
-        mipmapsPixelArrays[i] =
-        applyGaussianKernel (mipmapsPixelArrays[i - 1], mipmapsWidths[i - 1],
-                             mipmapsHeights[i - 1], SIGMA_TRANSITION);
-        mipmapsWidths[i]  = mipmapsWidths[i - 1] / 2;
-        mipmapsHeights[i] = mipmapsHeights[i - 1] / 2;
+
+        if(mipmapsWidths[i-1] > 1){
+            mipmapsPixelArrays[i] =
+            applyGaussianKernel (mipmapsPixelArrays[i - 1], mipmapsWidths[i - 1],
+                                mipmapsHeights[i - 1], SIGMA_TRANSITION);
+            mipmapsWidths[i]  = mipmapsWidths[i - 1] / 2;
+            mipmapsHeights[i] = mipmapsHeights[i - 1] / 2;
+        }
+        else{
+            mipmapsPixelArrays[i] = mipmapsPixelArrays[i-1];
+            mipmapsWidths[i]  = 1;
+
+            mipmapsHeights[i] = 1;
+        }
+        
     }
 
     for (int i = 0; i < nMipmaps; i++) {

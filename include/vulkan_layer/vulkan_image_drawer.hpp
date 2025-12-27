@@ -31,7 +31,7 @@ class VulkanImageDrawer {
     public:
     VulkanImageDrawer (const VulkanDevice& device,
                        VkExtent2D extent,
-                       const std::vector<std::vector<VulkanAttachment>>& attachmentsPerFramebuffer,
+                       const std::vector<std::vector<VulkanAttachment*>>& attachmentsPerFramebuffer,
                        bool isFirstPass,
                        const std::vector<VulkanDescriptorData>& descriptors,
                        std::vector<std::string> vertShaderPaths,
@@ -41,7 +41,7 @@ class VulkanImageDrawer {
                        bool enableDepthTest,
                        bool enableDepthWrite,
                        std::string name)
-    : pDevice (device), descriptors (descriptors),
+    : pDevice (device), descriptors (descriptors), isFirstPass(isFirstPass),
       renderPass (device, attachmentsPerFramebuffer[0], isFirstPass),
       imageExtent (extent), graphicsPipeline (device,
                                               renderPass,
