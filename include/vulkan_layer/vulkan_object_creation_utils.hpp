@@ -11,7 +11,7 @@ VkImage createImage (const VulkanDevice& device,
                      VkExtent2D extent,
                      VkFormat format,
                      VkImageUsageFlags imageUsage,
-                     bool isResolve,
+                     bool isSinglesampled,
                      std::string name) {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -25,8 +25,8 @@ VkImage createImage (const VulkanDevice& device,
     imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage         = imageUsage;
-    imageInfo.samples       = isResolve ? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;
-    imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.samples = isSinglesampled ? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VkImage image;
     if (vkCreateImage (device.getDevice (), &imageInfo, nullptr, &image) != VK_SUCCESS) { // depth image creation
         throw std::runtime_error ("Failed to create depth image!");
@@ -38,18 +38,18 @@ VkImage createImage (const VulkanDevice& device,
 
 VkImage createColorImage (const VulkanDevice& device,
                           VkExtent2D extent,
-                          bool isResolve,
+                          bool isSingleSampled,
                           std::string name,
                           VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
-    return createImage (device, extent, DEFAULT_COLOR_FORMAT, usage, isResolve, name);
+    return createImage (device, extent, DEFAULT_COLOR_FORMAT, usage, isSingleSampled, name);
 }
 
 VkImage createDepthImage (const VulkanDevice& device,
                           VkExtent2D extent,
-                          bool isResolve,
+                          bool isSingleSampled,
                           std::string name,
                           VkImageUsageFlags usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-    return createImage (device, extent, DEFAULT_DEPTH_FORMAT, usage, isResolve, name);
+    return createImage (device, extent, DEFAULT_DEPTH_FORMAT, usage, isSingleSampled, name);
 }
 
 VkImageView createImageView (const VulkanDevice& device,
@@ -167,10 +167,13 @@ VkDeviceMemory allocateAndBindBufferMemory (const VulkanDevice& device,
     return memory;
 }
 
-VkAttachmentDescription createColorAttachment (bool isResolve, VkAttachmentLoadOp loadOp) {
+VkAttachmentDescription
+createColorAttachment (bool isSingleSampled,
+                       VkAttachmentLoadOp loadOp,
+                       VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
     VkAttachmentDescription colorAttachment;
     colorAttachment.format = DEFAULT_COLOR_FORMAT; // same as swapchain
-    colorAttachment.samples = isResolve ? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL; // no MSAA for now
+    colorAttachment.samples = isSingleSampled ? VK_SAMPLE_COUNT_1_BIT : MSAA_LEVEL; // no MSAA for now
     colorAttachment.loadOp = loadOp;                        // clear at start
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store result for presentation
     colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -178,8 +181,8 @@ VkAttachmentDescription createColorAttachment (bool isResolve, VkAttachmentLoadO
     colorAttachment.initialLayout  = loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ?
      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR :
      VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // ready for presentation
-    colorAttachment.flags = 0;
+    colorAttachment.finalLayout    = finalLayout;
+    colorAttachment.flags          = 0;
     return colorAttachment;
 }
 
@@ -216,7 +219,7 @@ VkAttachmentDescription createShadowDepthAttachment (VkAttachmentLoadOp loadOp) 
     depthAttachment.initialLayout  = loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ?
      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL :
      VK_IMAGE_LAYOUT_UNDEFINED;
-      depthAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depthAttachment.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     return depthAttachment;
 }
 VkAttachmentReference createDepthAttachmentRef (int attachmentNumber) {
@@ -459,6 +462,15 @@ createVertexInputInfo (const VkVertexInputBindingDescription& bindingDescription
     return vertexInputInfo;
 }
 
+VkPipelineVertexInputStateCreateInfo createFullscreenVertexInputInfo(){
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+    return vertexInputInfo;
+}
 VkPipelineInputAssemblyStateCreateInfo createDefaultInputAssemblyInfo () {
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -523,7 +535,38 @@ VkPipelineColorBlendAttachmentState createFullColorBlendAttachment () {
     colorBlendAttachment.blendEnable = VK_FALSE;
     return colorBlendAttachment;
 }
+VkPipelineColorBlendAttachmentState createAdditiveAlphaBlendAttachment () {
+    VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+    VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
+    colorBlendAttachment.blendEnable = VK_TRUE;
+
+    // Additive
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+
+    // Usually same for alpha
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+    return colorBlendAttachment;
+}
+VkPipelineColorBlendAttachmentState createWeightedAlphaBlendAttachment () {
+    VkPipelineColorBlendAttachmentState blend = {};
+    blend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+    VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend.blendEnable         = VK_TRUE;
+    blend.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend.colorBlendOp        = VK_BLEND_OP_ADD;
+
+    blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend.alphaBlendOp        = VK_BLEND_OP_ADD;
+    return blend;
+}
 VkPipelineColorBlendStateCreateInfo
 createColorBlendStateInfo (const VkPipelineColorBlendAttachmentState& colorBlendAttachment) {
     VkPipelineColorBlendStateCreateInfo colorBlending{};
@@ -1161,20 +1204,18 @@ void createImageAndMipmapsFromFile (const VulkanDevice& device,
 
     for (int i = 1; i < nMipmaps; i++) {
 
-        if(mipmapsWidths[i-1] > 1){
+        if (mipmapsWidths[i - 1] > 1) {
             mipmapsPixelArrays[i] =
             applyGaussianKernel (mipmapsPixelArrays[i - 1], mipmapsWidths[i - 1],
-                                mipmapsHeights[i - 1], SIGMA_TRANSITION);
+                                 mipmapsHeights[i - 1], SIGMA_TRANSITION);
             mipmapsWidths[i]  = mipmapsWidths[i - 1] / 2;
             mipmapsHeights[i] = mipmapsHeights[i - 1] / 2;
-        }
-        else{
-            mipmapsPixelArrays[i] = mipmapsPixelArrays[i-1];
-            mipmapsWidths[i]  = 1;
+        } else {
+            mipmapsPixelArrays[i] = mipmapsPixelArrays[i - 1];
+            mipmapsWidths[i]      = 1;
 
             mipmapsHeights[i] = 1;
         }
-        
     }
 
     for (int i = 0; i < nMipmaps; i++) {

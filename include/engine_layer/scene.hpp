@@ -2,8 +2,7 @@
 
 #include <vector>
 #include "crumb.hpp"
-#include "camera.hpp"
-#include <optional>
+class Camera;
 class Scene{
     private: 
         std::vector<Crumb*> m_crumbs;

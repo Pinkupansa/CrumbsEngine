@@ -198,6 +198,8 @@ vec3 computeAmbient(vec3 N){
 }
 void main() {
     vec3 textureColor = computeTexColor(fragUV, customProps.atlasOffset, customProps.relativeTextureSize, customProps.tilingFactor, fragCamPos.z).rgb;
+
+    
     vec3 N = computeNormal(); 
     vec3 L = getLightDir();
 
@@ -243,4 +245,5 @@ void main() {
     //vec3 lighting = textureColor;
     //vec3 lighting = vec3(shadow, shadow, shadow);
     outColor = vec4(lighting, 1.0);
+
 }

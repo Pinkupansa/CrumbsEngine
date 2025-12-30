@@ -1,16 +1,16 @@
 #pragma once
-#include "vulkan_mesh_draw_info.hpp"
 #include "vulkan_buffer.hpp"
 #include "vulkan_descriptor.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_framebuffers.hpp"
+#include "vulkan_mesh_draw_info.hpp"
 #include "vulkan_pipeline.hpp"
 #include "vulkan_render_pass.hpp"
 
+#include "vulkan_descriptor_data.hpp"
 #include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan.h>
-#include "vulkan_descriptor_data.hpp"
 
 class VulkanCommandBuffers {
     private:
@@ -57,7 +57,8 @@ class VulkanCommandBuffers {
                  const VulkanPipeline& graphicsPipeline,
                  std::vector<MeshDrawInfo> meshPool,
                  std::vector<uint32_t> meshDrawIndices,
-                 int commandBufferIndex) const {
+                 int commandBufferIndex,
+                 bool isFullscreenShader) const {
 
         // split descriptors in dynamic and non-dynamic
 
@@ -79,8 +80,8 @@ class VulkanCommandBuffers {
         if (vkBeginCommandBuffer (commandBuffers[commandBufferIndex], &beginInfo) != VK_SUCCESS)
             throw std::runtime_error (
             "Failed to begin recording command buffer!");
-        
-        std::vector<VkClearValue> clearValues = renderPass.getClearValues();
+
+        std::vector<VkClearValue> clearValues = renderPass.getClearValues ();
 
         VkRenderPassBeginInfo renderPassInfo =
         createRenderPassBeginInfo (renderPass.getRenderPass (),
@@ -91,13 +92,6 @@ class VulkanCommandBuffers {
                               &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline (commandBuffers[commandBufferIndex], VK_PIPELINE_BIND_POINT_GRAPHICS,
                            graphicsPipeline.getPipeline ());
-        VkDeviceSize offset = 0;
-        vkCmdBindVertexBuffers (commandBuffers[commandBufferIndex], 0, 1,
-                                &vertexBuffer.getBuffer (), &offset);
-
-        vkCmdBindIndexBuffer (commandBuffers[commandBufferIndex],
-                              indexBuffer.getBuffer (), 0, VK_INDEX_TYPE_UINT32);
-
         for (VulkanDescriptorData desc : staticDescriptors) {
             vkCmdBindDescriptorSets (commandBuffers[commandBufferIndex],
                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -108,31 +102,43 @@ class VulkanCommandBuffers {
                                      nullptr // dynamic offsets
             );
         }
+        if (isFullscreenShader) {
+            vkCmdDraw (commandBuffers[commandBufferIndex], 3, 1, 0, 0);
+            Debug::Log("hallo");
+        } else {
+            VkDeviceSize offset = 0;
+            vkCmdBindVertexBuffers (commandBuffers[commandBufferIndex], 0, 1,
+                                    &vertexBuffer.getBuffer (), &offset);
 
-        // TODO : split in dynamic and non dynamic descriptors and bind dynamic in loop
-        for (size_t j = 0; j < meshDrawIndices.size (); ++j) {
-            for (VulkanDescriptorData desc : dynamicDescriptors) {
-                uint32_t dynamicOffset =
-                static_cast<uint32_t> (desc.alignedObjectSize * j);
+            vkCmdBindIndexBuffer (commandBuffers[commandBufferIndex],
+                                  indexBuffer.getBuffer (), 0, VK_INDEX_TYPE_UINT32);
 
-                // Bind the descriptor set with the dynamic offset
-                vkCmdBindDescriptorSets (commandBuffers[commandBufferIndex],
-                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                         graphicsPipeline.getLayout (), desc.set, 1,
-                                         &desc.descriptorSet, 1, &dynamicOffset);
+
+            // TODO : split in dynamic and non dynamic descriptors and bind dynamic in loop
+            for (size_t j = 0; j < meshDrawIndices.size (); ++j) {
+                for (VulkanDescriptorData desc : dynamicDescriptors) {
+                    uint32_t dynamicOffset =
+                    static_cast<uint32_t> (desc.alignedObjectSize * j);
+
+                    // Bind the descriptor set with the dynamic offset
+                    vkCmdBindDescriptorSets (commandBuffers[commandBufferIndex],
+                                             VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                             graphicsPipeline.getLayout (), desc.set,
+                                             1, &desc.descriptorSet, 1, &dynamicOffset);
+                }
+
+
+                // Draw using the information in MeshDrawInfo
+                const MeshDrawInfo& drawInfo = meshPool[meshDrawIndices[j]];
+
+                vkCmdDrawIndexed (commandBuffers[commandBufferIndex],
+                                  drawInfo.indexCount, // number of indices to draw
+                                  1,                   // instance count
+                                  drawInfo.indexOffset,  // first index
+                                  drawInfo.vertexOffset, // vertex offset
+                                  0                      // first instance
+                );
             }
-
-
-            // Draw using the information in MeshDrawInfo
-            const MeshDrawInfo& drawInfo = meshPool[meshDrawIndices[j]];
-
-            vkCmdDrawIndexed (commandBuffers[commandBufferIndex],
-                              drawInfo.indexCount,  // number of indices to draw
-                              1,                    // instance count
-                              drawInfo.indexOffset, // first index
-                              drawInfo.vertexOffset, // vertex offset
-                              0                      // first instance
-            );
         }
 
         vkCmdEndRenderPass (commandBuffers[commandBufferIndex]);

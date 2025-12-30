@@ -5,6 +5,7 @@
 #include "primitive_meshes.hpp"
 #include "scene.hpp"
 #include "vulkan_renderer.hpp"
+#include "vulkan_shader_data.hpp"
 #include <GLFW/glfw3.h>
 using Clock = std::chrono::high_resolution_clock;
 
@@ -73,7 +74,7 @@ int main () {
 
     // load all texture in the texture folder
     //  go through all files in the textures/ directory
-
+    int grassBillboardIndex = renderer.loadTexture("textures/grass_billboard.png");
     int grassIndex       = renderer.loadTexture ("textures/portalfloor.png");
     int grassNormalIndex = renderer.loadTexture ("textures/grass3_normal.jpg");
     int rockwallTexIndex =
@@ -93,8 +94,47 @@ int main () {
 
     renderer.buildTextureAtlas ();
 
-    int litShaderIndex = renderer.loadShader ("shaders/lit.frag", VK_COMPARE_OP_LESS);
-    int unlitShaderIndex = renderer.loadShader ("shaders/unlit.frag", VK_COMPARE_OP_LESS);
+
+    VulkanShaderData shader1Data ("shaders/lit.frag", true, true, VulkanAlphaBlendMode::None);
+
+    VulkanShaderData shader2Data ("shaders/unlit.frag", true, true, VulkanAlphaBlendMode::None);
+
+
+    VulkanRenderTexture* renderTex = renderer.createRenderTexture ("helo");
+
+    VulkanShaderData transparencyShader ("shaders/transparent.frag", true, false, VulkanAlphaBlendMode::Additive);
+    transparencyShader.bindTargetRenderTexture (*renderTex);
+
+    VulkanShaderData transparencyResolveShader (
+    "shaders/transparency_resolve.frag", false, false, VulkanAlphaBlendMode::Weighted, true, nullptr, nullptr, nullptr, VK_CULL_MODE_NONE);
+    transparencyResolveShader.bindSourceRenderTexture (*renderTex);
+
+    int litShaderIndex         = renderer.loadShader (shader1Data);
+    int unlitShaderIndex       = renderer.loadShader (shader2Data);
+    int transparentShaderIndex = renderer.loadShader (transparencyShader);
+    int transparentResolveShaderIndex = renderer.loadShader (transparencyResolveShader);
+
+
+    Mesh windowMesh     = generateQuad ();
+    int windowMeshIndex = renderer.loadMesh (windowMesh);
+
+    Material mWindow (transparentShaderIndex);
+    mWindow.setProperty ("tint", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+    mWindow.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassBillboardIndex));
+    mWindow.setProperty("relativeTextureSize", renderer.getRelativeTextureSize (grassBillboardIndex));
+    mWindow.setProperty ("tilingFactor", glm::vec2 (1.0f));
+    RenderData windowRenderData (windowMeshIndex, mWindow, false);
+    Crumb windowObj (windowRenderData);
+    windowObj.transform.position        = { 0, 0.2f, 0 };
+
+
+
+    Material mWindow2(transparentShaderIndex);
+    mWindow2.setProperty("tint", glm::vec4(1.0f, 0.0f, 0.0f, 0.2f));
+    RenderData windowRenderData2 (windowMeshIndex, mWindow2, false);
+    Crumb windowObj2 (windowRenderData2);
+    windowObj2.transform.position        = { 0.2f, 0.5f, 0 };
+
 
     Material mPortal (litShaderIndex);
     mPortal.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (portalgunTexIndex));
@@ -105,11 +145,11 @@ int main () {
     mPortal.setProperty ("normalmapRelativeTextureSize",
                          renderer.getRelativeTextureSize (portalgunNormalInex));
     mPortal.setProperty ("tilingFactor", glm::vec2 (1.0f));
-    mPortal.setProperty("specularity", 1.5f);
+    mPortal.setProperty ("specularity", 1.0f);
     RenderData portalGunRenderData (portalGunMeshIndex, mPortal);
     Crumb portalGun (portalGunRenderData);
     portalGun.transform.position = { 0, 0.1f, 0 };
-    portalGun.transform.scaleByFactor(glm::vec3(0.5f));
+    portalGun.transform.scaleByFactor (glm::vec3 (0.5f));
 
 
     Material m (litShaderIndex);
@@ -127,8 +167,8 @@ int main () {
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
     Material m2 (litShaderIndex);
-    m2.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassIndex));
-    m2.setProperty ("relativeTextureSize", renderer.getRelativeTextureSize (grassIndex));
+    m2.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassBillboardIndex));
+    m2.setProperty ("relativeTextureSize", renderer.getRelativeTextureSize (grassBillboardIndex));
     m2.setProperty ("tilingFactor", glm::vec2 (10.0f));
 
     RenderData floorRenderData (quadIndex, m2);
@@ -169,8 +209,11 @@ int main () {
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
     scene.addCrumb (skyboxObject);
-    //scene.addCrumb (dragonObject);
+    // scene.addCrumb (dragonObject);
     scene.addCrumb (portalGun);
+    scene.addCrumb (windowObj);
+    scene.addCrumb (windowObj2);
+
     Camera cam ({ 0, 0, 0 }, { 0, 0, 1 });
     scene.setCamera (cam);
 
@@ -186,8 +229,8 @@ int main () {
         std::chrono::duration<float> (currentTime - lastTime).count (); // in seconds
         lastTime = currentTime;
         elapsedTime += deltaTime;
-        Debug::Log(std::to_string(1/deltaTime));
-        float speed = 3;
+        // Debug::Log (std::to_string (1 / deltaTime));
+        float speed = 4;
 
         if (inputs.isPressed (GLFW_KEY_W)) {
             cam.transform.translate (speed * deltaTime * cam.transform.forward ());
@@ -215,7 +258,9 @@ int main () {
         glfwPollEvents ();
     }
 
+
     renderer.destroy ();
+
     glfwDestroyWindow (window);
     glfwTerminate ();
 }

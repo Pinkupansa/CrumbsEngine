@@ -6,6 +6,7 @@
 #include "vulkan_attachment.hpp"
 #include <vector>
 #include <vulkan/vulkan.h>
+#include <functional>
 class VulkanSwapchain {
     private:
     VulkanDevice& pDevice;
@@ -20,15 +21,22 @@ class VulkanSwapchain {
     VulkanAttachment* depthAttachment; 
     VulkanSyncObjects syncObjects; 
 
-    uint32_t currentFrame;
-
-    int currentSyncIndex;
-
     public:
+
     const VkSwapchainKHR& getSwapchain () const {
         return swapchain;
     }
- 
+    
+    const std::function<void()> getFenceResetCallback(){
+        return std::bind (&VulkanSwapchain::waitAndResetFences, this);
+    }
+    VulkanAttachment* getDepthAttachment() const{
+        return depthAttachment;
+    }
+
+    const VulkanSyncObjects& getSyncObjects(){
+        return syncObjects;
+    }
 
     std::vector<std::vector<VulkanAttachment*>> getAttachmentsPerFrameBuffer () {
         return { { msaaColorAttachments[0], depthAttachment, swapchainAttachments [0]},
@@ -36,7 +44,7 @@ class VulkanSwapchain {
                  { msaaColorAttachments[2], depthAttachment, swapchainAttachments [2]}};
     }
     VulkanSwapchain (VulkanDevice& device, VulkanSurface& surface)
-    : pDevice (device), syncObjects(device, 3) {
+    : pDevice (device), syncObjects(device, 3, true) {
 
         swapchain = createTripleBufferingSwapchain (device, surface, "Main Swapchain");
 
@@ -52,20 +60,20 @@ class VulkanSwapchain {
 
 
         for(int i = 0; i < imageCount; i++){
-            VulkanAttachment* msaaColorAttachment = new VulkanAttachment(device, VulkanAttachmentType::Color, surface.getCapabilities().currentExtent, false, "MSAA Color Attachment " + std::to_string(i));
+            VulkanAttachment* msaaColorAttachment = new VulkanAttachment(device, VulkanAttachmentType::Color, surface.getCapabilities().currentExtent, false, false, createColorClearValue({0, 0, 0, 0}), "MSAA Color Attachment " + std::to_string(i));
             msaaColorAttachments.push_back(msaaColorAttachment);
         }
 
         // 2. Create image views
         for (int i = 0; i < imageCount; i++) {
-            VulkanAttachment* swapchainAttachment = new VulkanAttachment(device, VulkanAttachmentType::Color, swapchainImages[i], surface.getCapabilities().currentExtent, true, "Swapchain Attachment " + std::to_string(i));
+            VulkanAttachment* swapchainAttachment = new VulkanAttachment(device, VulkanAttachmentType::Color, swapchainImages[i], surface.getCapabilities().currentExtent, true, true, createColorClearValue({0, 0, 0, 0}),"Swapchain Attachment " + std::to_string(i));
             swapchainAttachments.push_back(swapchainAttachment);
         }
 
-        depthAttachment = new VulkanAttachment(device, VulkanAttachmentType::Depth, surface.getCapabilities().currentExtent, false, "Main Depth Attachment ");
+        depthAttachment = new VulkanAttachment(device, VulkanAttachmentType::Depth, surface.getCapabilities().currentExtent, false, false, createDepthClearValue({1.0f, 0}),
+                                               "Main Depth Attachment ");
 
-        currentFrame = 0;
-        currentSyncIndex = 0;
+
     }
 
 
@@ -75,36 +83,30 @@ class VulkanSwapchain {
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores    = &syncObjects.renderFinishedSemaphore[currentSyncIndex];
+        presentInfo.pWaitSemaphores    = &syncObjects.renderFinishedSemaphore[syncObjects.getSyncIndex()];
         presentInfo.swapchainCount     = 1;
         presentInfo.pSwapchains        = &swapchain;
-        presentInfo.pImageIndices      = &currentFrame;
+        std::vector<uint32_t> imageIndices = {syncObjects.getCurrentFrame()};
+        presentInfo.pImageIndices      = imageIndices.data();
         vkQueuePresentKHR (pDevice.getGraphicsQueue (), &presentInfo);
 
-        currentSyncIndex = (currentSyncIndex + 1) % 3;
-        
+        syncObjects.updateSyncIndex(); 
         
     }
 
     void updateFrameIndex () {
+        uint32_t currentFrame = 0;
         vkAcquireNextImageKHR (pDevice.getDevice (), swapchain, UINT64_MAX,
-                               syncObjects.imageAvailableSemaphore[currentSyncIndex], VK_NULL_HANDLE, &currentFrame);
+                               syncObjects.imageAvailableSemaphore[syncObjects.getSyncIndex()], VK_NULL_HANDLE, &currentFrame);
+        syncObjects.setCurrentFrame(currentFrame);
     }
 
     void waitAndResetFences () const {
         vkWaitForFences (pDevice.getDevice (), 1,
-                         &syncObjects.inFlightFence[currentSyncIndex], VK_TRUE, UINT64_MAX);
-        vkResetFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[currentSyncIndex]);
+                         &syncObjects.inFlightFence[syncObjects.currentSyncIndex], VK_TRUE, UINT64_MAX);
+        vkResetFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[syncObjects.currentSyncIndex]);
     }
 
-    void drawWithDrawer (VulkanImageDrawer& imageDrawer,
-                         const VulkanBuffer& vertexBuffer,
-                         const VulkanBuffer& indexBuffer,
-                         const std::vector<MeshDrawInfo>& meshPool,
-                         const std::vector<uint32_t>& drawCallMeshIndices) {
-        waitAndResetFences ();
-        imageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices, syncObjects, true, true, currentSyncIndex, currentFrame);
-    }
     ~VulkanSwapchain () {
         destroy ();
     }

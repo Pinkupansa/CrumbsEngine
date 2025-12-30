@@ -35,6 +35,11 @@ class VulkanRenderPass {
         std::vector<VkAttachmentDescription> colorAttachmentDescs;
         std::vector<VkAttachmentDescription> depthAttachmentDescs;
         std::vector<VkAttachmentDescription> resolveAttachmentDescs;
+        
+        std::vector<VkClearValue> colorClearValues;
+        std::vector<VkClearValue> depthClearValues;
+        std::vector<VkClearValue> resolveClearValues;
+
 
         for(auto& attachment : attachments){
             VkAttachmentDescription desc = attachment->createAttachmentDesc(getLoadOp());
@@ -42,16 +47,22 @@ class VulkanRenderPass {
                 case VulkanAttachmentType::Color:
                     if(attachment->isColorResolveAttachment()){
                         resolveAttachmentDescs.push_back(desc);
+                        resolveClearValues.push_back(attachment->getClearValue());
+
                     }
                     else{
                         colorAttachmentDescs.push_back(desc);
+                        colorClearValues.push_back(attachment->getClearValue());
+
                     }
                     break;
                 case VulkanAttachmentType::Depth:
                     depthAttachmentDescs.push_back(desc);
+                    depthClearValues.push_back(attachment->getClearValue());
                     break;
                 case VulkanAttachmentType::ShadowMap:
                     depthAttachmentDescs.push_back(desc);
+                    depthClearValues.push_back(attachment->getClearValue());
                     break;
             }
         }
@@ -59,14 +70,15 @@ class VulkanRenderPass {
         int attachmentCount = 0;
         hasResolve = resolveAttachmentDescs.size() > 0;
         for(int i = 0; i < colorAttachmentDescs.size(); i++){
-            clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
+            clearValues.push_back(colorClearValues[i]);
+
         }
 
         for(int i = 0; i < depthAttachmentDescs.size(); i++){
-            clearValues.push_back(createDepthClearValue({1.0f, 0}));
+            clearValues.push_back(depthClearValues[i]);
         }
         for(int i = 0; i < resolveAttachmentDescs.size(); i++){
-            clearValues.push_back(createColorClearValue({0.1f, 0.1f, 0.1f, 0.1f}));
+            clearValues.push_back(resolveClearValues[i]);
         }
         std::vector<VkAttachmentReference> colorAttachmentsRefs;
         for (VkAttachmentDescription cAtt : colorAttachmentDescs) {
@@ -88,9 +100,11 @@ class VulkanRenderPass {
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount    = colorAttachmentsRefs.size ();
-        subpass.pColorAttachments       = colorAttachmentsRefs.data ();
-        subpass.pDepthStencilAttachment = depthAttachmentsRefs.data ();
-        subpass.pResolveAttachments     = resolveAttachmentsRefs.data ();
+        subpass.pColorAttachments       = colorAttachmentsRefs.size() > 0? colorAttachmentsRefs.data () : nullptr;
+        subpass.pDepthStencilAttachment = depthAttachmentsRefs.size() > 0? depthAttachmentsRefs.data () : nullptr;
+        Debug::Log(std::to_string(resolveAttachmentDescs.size()));
+        subpass.pResolveAttachments     = hasResolve? resolveAttachmentsRefs.data () : nullptr;
+        
 
         std::vector<VkAttachmentDescription> attachmentDescs = colorAttachmentDescs;
         attachmentDescs.insert (attachmentDescs.end (), depthAttachmentDescs.begin (),

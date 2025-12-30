@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include "fsb_object.hpp"
-#include <map>
 // engine level material definition
 // can be converted to vulkan level descriptor set later
 

@@ -4,7 +4,9 @@
 #include "vulkan_object_creation_utils.hpp"
 #include "vulkan_descriptor_data.hpp"
 
-class VulkanTextureSampler{
+//Holds necessary info to attach a texture to a shader.
+//TODO : add option to create image from file ? 
+class VulkanTextureDescriptor{
     private: 
         const VulkanDevice& device;
         VkSampler sampler;
@@ -22,7 +24,7 @@ class VulkanTextureSampler{
                  binding,
                  set };
     }
-    VulkanTextureSampler(const VulkanDevice& device, VkImageView imageView, std::string name) : device(device){
+    VulkanTextureDescriptor(const VulkanDevice& device, VkImageView imageView, std::string name) : device(device){
         sampler = createSampler(device, name + " Sampler");
         descLayout = createDescriptorLayout(device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                                 VK_SHADER_STAGE_FRAGMENT_BIT, 0);
@@ -33,7 +35,7 @@ class VulkanTextureSampler{
         writeImageSamplerInDescriptorSet(device, imageView, sampler, descSet);
     }
 
-    ~VulkanTextureSampler () {
+    ~VulkanTextureDescriptor () {
         destroy ();
     }
     void destroy(){

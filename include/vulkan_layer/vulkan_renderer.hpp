@@ -1,29 +1,35 @@
 #pragma once
 #define GLFW_INCLUDE_VULKAN
+
+#include "camera.hpp"
 #include "mesh.hpp"
+#include "scene.hpp"
 #include "vulkan_buffer.hpp"
 #include "vulkan_descriptor.hpp"
 #include "vulkan_device.hpp"
 #include "vulkan_flexible_shader_buffer.hpp"
 #include "vulkan_image_drawer.hpp"
 #include "vulkan_mesh_draw_info.hpp"
+#include "vulkan_render_texture.hpp"
 #include "vulkan_scene_ubo.hpp"
+#include "vulkan_shader_data.hpp"
 #include "vulkan_shadow_map.hpp"
 #include "vulkan_swapchain.hpp"
 #include "vulkan_texture_bundle.hpp"
 #include "vulkan_ubo.hpp"
 #include "vulkan_vertex.hpp"
 #include <GLFW/glfw3.h>
+#include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
-
 
 class VulkanRenderer {
     private:
     // Shader paths
-    std::string vertShaderPath   = "./shaders/test.vert.spv";
-    std::string fragShaderPath   = "./shaders/test.frag.spv";
-    std::string shadowShaderPath = "./shaders/shadows.vert.spv";
+    std::string vertShaderPath       = "./shaders/test.vert.spv";
+    std::string fullScreenShaderPath = "./shaders/fullscreen.vert.spv";
+    std::string fragShaderPath       = "./shaders/test.frag.spv";
+    std::string shadowShaderPath     = "./shaders/shadows.vert.spv";
 
     std::vector<std::string> fragShaderPaths;
     // Window info
@@ -58,7 +64,7 @@ class VulkanRenderer {
     VulkanUBDescriptor allObjectsUBDescriptor;
     VulkanUBDescriptor sceneDataUBDescriptor;
 
-    VulkanShadowMap shadowView;
+    VulkanShadowMap shadowMap;
     VulkanImageDrawer shadowImageDrawer;
 
     // use heap because created when loading shader and hold references to VkObjects that are destroyed if the object is destroyed
@@ -81,9 +87,9 @@ class VulkanRenderer {
     std::vector<VulkanUniformBufferObject> ubos;
 
 
-
     bool loadedFirstDrawer = false; // used to decide which drawer will clean
 
+    std::vector<VulkanRenderTexture*> renderTextures; // stored to clean later
 
     public:
     VulkanRenderer (GLFWwindow* _window, uint32_t _width, uint32_t _height)
@@ -133,18 +139,21 @@ class VulkanRenderer {
                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                              sizeof (VulkanSceneUBO),
                              "Scene UB Descriptor Set"),
-      shadowView (device, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEFAULT_SHADOW_FORMAT),
+      shadowMap (device, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEFAULT_SHADOW_FORMAT),
       shadowImageDrawer (device,
-                         shadowView.getShadowAttachment()->getExtent (),
-                         shadowView.getAttachmentsPerFrameBuffer (),
+                         shadowMap.getShadowAttachment ()->getExtent (),
+                         shadowMap.getAttachmentsPerFrameBuffer (),
                          true,
                          { sceneDataUBDescriptor.getDescData (0, 0),
                            allObjectsUBDescriptor.getDescData (0, 1) },
+                         shadowMap.getSyncObjects (),
+                         shadowMap.getFenceResetCallback (),
                          { shadowShaderPath },
                          {},
                          VK_CULL_MODE_NONE,
                          true,
-                         true,
+                         true, false,
+                         VulkanAlphaBlendMode::None,
                          "Shadow Image Drawer")
     /*TODO : Create instead one image drawer per fragShader, and one objectsUB per shader ?*/ {
         std::cout << "Vertex buffer size: " << MAX_VERTEX_NUMBER * vertexSize << std::endl;
@@ -229,8 +238,7 @@ class VulkanRenderer {
         std::vector<uint8_t> paddedUBOs = padUBOData (ubos, uboAlignedSize);
         allObjectsUB.update (paddedUBOs.data (), paddedUBOs.size (), 0);
 
-        shadowView.drawWithDrawer (shadowImageDrawer, vertexBuffer, indexBuffer,
-                                   meshPool, drawCallMeshIndices);
+        shadowImageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices);
 
         swapchain.updateFrameIndex ();
 
@@ -239,13 +247,12 @@ class VulkanRenderer {
                 std::vector<uint8_t> paddedUBOsForShader =
                 padUBOData (ubosPerFragShader[i], uboAlignedSize);
                 objectsUBPerFragShader[i]->update (paddedUBOsForShader.data (),
-                                                paddedUBOsForShader.size (), 0);
+                                                   paddedUBOsForShader.size (), 0);
                 flexibleBufferPerFragShader[i]->pushToGPU ();
             }
-            
-            swapchain.drawWithDrawer (*imageDrawersPerFragShader[i],
-                                      vertexBuffer, indexBuffer, meshPool,
-                                      drawCallMeshIndicesPerFragShader[i]);
+
+            imageDrawersPerFragShader[i]->draw (vertexBuffer, indexBuffer, meshPool,
+                                                drawCallMeshIndicesPerFragShader[i]);
         }
 
         swapchain.present ();
@@ -259,7 +266,14 @@ class VulkanRenderer {
         }
     }
 
-    int loadShader (const std::string& filePath, VkCompareOp compareOp) {
+    VulkanRenderTexture* createRenderTexture (std::string name) {
+        VulkanRenderTexture* rendTex =
+        new VulkanRenderTexture (device, mainSurface.getCapabilities ().currentExtent, name);
+        renderTextures.push_back (rendTex);
+        return rendTex;
+    }
+    int loadShader (const VulkanShaderData& shaderData) {
+        std::string filePath = shaderData.filePath;
         fragShaderPaths.push_back (filePath);
 
         std::string spvPath = filePath + ".spv";
@@ -292,16 +306,46 @@ class VulkanRenderer {
 
         customUBDescriptorPerFragShader.push_back (customUBDescForShader);
 
-        VulkanImageDrawer* shaderDrawer = new VulkanImageDrawer (
-        device, mainSurface.getCapabilities ().currentExtent,
-        swapchain.getAttachmentsPerFrameBuffer (),
-        !loadedFirstDrawer,
-        { sceneDataUBDescriptor.getDescData (0, 0),
-          objectsUBDescriptorPerFragShader.back ()->getDescData (0, 1),
-          shadowView.getTextureSampler().getDescData (0, 2), textureBundle.getDescData (0, 3),
-          customUBDescForShader->getDescData (0, DEFAULT_CUSTOM_FRAG_PROPERTIES_SET_NUMBER) },
-        { vertShaderPath }, { spvPath },
-        VK_CULL_MODE_BACK_BIT, true, true, "Shader " + filePath);
+
+        std::vector<VulkanDescriptorData> descriptorsForShader = {
+            sceneDataUBDescriptor.getDescData (0, 0),
+            objectsUBDescriptorPerFragShader.back ()->getDescData (0, 1),
+            shadowMap.getTexture ().getDescData (0, 2), textureBundle.getDescData (0, 3),
+            customUBDescForShader->getDescData (0, DEFAULT_CUSTOM_FRAG_PROPERTIES_SET_NUMBER)
+        };
+
+        for (int i = 0; i < shaderData.textureDescriptors.size (); i++) {
+            descriptorsForShader.push_back (shaderData.textureDescriptors[i]->getDescData (
+            0, DEFAULT_CUSTOM_FRAG_PROPERTIES_SET_NUMBER + 1 + i));
+        }
+        VulkanImageDrawer* shaderDrawer;
+        if (shaderData.colorAttachment == nullptr) {
+            // render on swapchain
+            shaderDrawer = new VulkanImageDrawer (
+            device, mainSurface.getCapabilities ().currentExtent,
+            swapchain.getAttachmentsPerFrameBuffer (), !loadedFirstDrawer, descriptorsForShader,
+            swapchain.getSyncObjects (), swapchain.getFenceResetCallback (),
+            { shaderData.isFullScreenShader ? fullScreenShaderPath : vertShaderPath },
+            { spvPath }, shaderData.cullMode, shaderData.enableDepthTest,
+            shaderData.enableDepthWrite, shaderData.isFullScreenShader, shaderData.alphaBlendMode, "Shader " + filePath);
+            loadedFirstDrawer = true;
+        } else {
+            // render on custom attachment, supposing it is color
+            if (shaderData.colorAttachment->getType () != VulkanAttachmentType::Color) {
+                throw std::runtime_error (
+                "Non-color custom attachment type not supported !");
+            }
+            shaderDrawer = new VulkanImageDrawer (
+            device, mainSurface.getCapabilities ().currentExtent,
+            { { shaderData.colorAttachment, swapchain.getDepthAttachment (),
+                shaderData.resolveAttachment } },
+            true, descriptorsForShader, *shaderData.renderTargetSyncObjects,
+            shaderData.renderTargetFenceResetCallback,
+            { shaderData.isFullScreenShader ? fullScreenShaderPath : vertShaderPath },
+            { spvPath }, shaderData.cullMode, shaderData.enableDepthTest,
+            shaderData.enableDepthWrite, shaderData.isFullScreenShader, shaderData.alphaBlendMode, "Shader " + filePath);
+        }
+
 
         imageDrawersPerFragShader.push_back (shaderDrawer);
 
@@ -311,8 +355,8 @@ class VulkanRenderer {
         std::vector<VulkanUniformBufferObject> ubosForShader;
         ubosPerFragShader.push_back (ubosForShader);
 
-        int shaderIndex   = fragShaderPaths.size () - 1;
-        loadedFirstDrawer = true;
+        int shaderIndex = fragShaderPaths.size () - 1;
+
 
         return shaderIndex;
     }
@@ -325,11 +369,11 @@ class VulkanRenderer {
         textureBundle.buildTextureAtlas ();
     }
 
-    glm::vec2 getTextureAtlasOffset(int textureIndex){
-        return textureBundle.getTextureAtlasOffset(textureIndex);
+    glm::vec2 getTextureAtlasOffset (int textureIndex) {
+        return textureBundle.getTextureAtlasOffset (textureIndex);
     }
-    glm::vec2 getRelativeTextureSize(int textureIndex){
-        return textureBundle.getTextureSize(textureIndex);
+    glm::vec2 getRelativeTextureSize (int textureIndex) {
+        return textureBundle.getTextureSize (textureIndex);
     }
     ~VulkanRenderer () {
         destroy ();
@@ -363,11 +407,15 @@ class VulkanRenderer {
         sceneDataUB.destroy ();
         allObjectsUBDescriptor.destroy ();
         allObjectsUB.destroy ();
+
+        for (auto& rendTex : renderTextures) {
+            rendTex->destroy ();
+        }
         vertexBuffer.destroy ();
         indexBuffer.destroy ();
         swapchain.destroy ();
         mainSurface.destroy ();
-        shadowView.destroy ();
+        shadowMap.destroy ();
         textureBundle.destroy ();
         device.destroy ();
         instance.destroy ();

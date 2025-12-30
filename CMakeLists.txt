@@ -12,6 +12,12 @@ pkg_check_modules(GLFW REQUIRED glfw3)
 # Find Assimp
 find_package(assimp REQUIRED)
 
+find_program(CCACHE_PROGRAM ccache)
+if (CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER   ccache)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
+endif()
+
 # Sources
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 file(GLOB_RECURSE HEADERS "include/*.h" "include/*.hpp")
@@ -84,17 +90,24 @@ add_custom_target(shaders ALL DEPENDS ${SPIRV_BINARIES})
 
 # Make executable depend on shaders
 add_dependencies(vulkan_test shaders)
+target_precompile_headers(vulkan_test PRIVATE
+    <vulkan/vulkan.h>
+    <GLFW/glfw3.h>
+    <vector>
+    <string>
+    <unordered_map>
+)
 
 set(OpenMP_ROOT "/opt/homebrew/opt/libomp")
 find_package(OpenMP REQUIRED)
 target_link_libraries(vulkan_test PRIVATE OpenMP::OpenMP_CXX)
 
 target_compile_options(vulkan_test PRIVATE
-        -fsanitize=address
+        -fsanitize=address,undefined
         -fno-omit-frame-pointer
         -O3
         -g
     )
     target_link_options(vulkan_test PRIVATE
-        -fsanitize=address
+        -fsanitize=address,undefined
     )
