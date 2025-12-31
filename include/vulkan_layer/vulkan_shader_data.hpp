@@ -1,8 +1,12 @@
 #pragma once
+#include <string>
+#include <vector>
+#include <functional>
+
 #include "vulkan_attachment.hpp"
 #include "vulkan_render_texture.hpp"
 #include "vulkan_texture_descriptor.hpp"
-#include <string>
+#include <vulkan/vulkan.h>
 
 
 enum VulkanAlphaBlendMode { None, Additive, Weighted };
@@ -29,24 +33,9 @@ class VulkanShaderData {
                       VulkanSyncObjects* customRenderTargetSyncObjects = nullptr,
                       VkCullModeFlagBits customCullMode = VK_CULL_MODE_BACK_BIT,
                       std::function<void ()> customRenderTargetFenceResetCallback = nullptr,
-                      std::vector<VulkanTextureDescriptor*> customTextureDescriptors = {})
-    : filePath (filePath), enableDepthTest (enableDepthTest),
-      enableDepthWrite (enableDepthWrite), colorAttachment (customColorAttachment),
-      resolveAttachment (customResolveAttachment),
-      renderTargetSyncObjects (customRenderTargetSyncObjects),
-      renderTargetFenceResetCallback (customRenderTargetFenceResetCallback),
-      textureDescriptors (customTextureDescriptors), alphaBlendMode (alphaBlendMode),
-      isFullScreenShader (isFullScreenShader), cullMode (customCullMode) {
-    }
+                      std::vector<VulkanTextureDescriptor*> customTextureDescriptors = {});
 
-    void bindTargetRenderTexture (VulkanRenderTexture& renderTexture) {
-        colorAttachment                = renderTexture.getColorAttachment ();
-        resolveAttachment              = renderTexture.getResolveAttachment ();
-        renderTargetSyncObjects        = renderTexture.getSyncObjects ();
-        renderTargetFenceResetCallback = renderTexture.getFenceResetCallback ();
-    }
+    void bindTargetRenderTexture (VulkanRenderTexture& renderTexture);
 
-    void bindSourceRenderTexture (VulkanRenderTexture& renderTexture) {
-        textureDescriptors.push_back (&(renderTexture.getTextureDescriptor ()));
-    }
+    void bindSourceRenderTexture (VulkanRenderTexture& renderTexture);
 };

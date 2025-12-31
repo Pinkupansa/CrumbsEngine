@@ -1,56 +1,34 @@
 #pragma once
-#include "vulkan_descriptor_data.hpp"
-#include "vulkan_device.hpp"
-#include "vulkan_object_creation_utils.hpp"
-#include "vulkan_texture_descriptor.hpp"
-#include <vector>
 #include <vulkan/vulkan.h>
+#include <vector>
+#include <functional>
+
+#include "vulkan_attachment.hpp"
+#include "vulkan_device.hpp"
+#include "vulkan_sync_objects.hpp"
+#include "vulkan_texture_descriptor.hpp"
+
 class VulkanShadowMap {
-    private:
-    VulkanDevice& pDevice;
+ private:
+  VulkanDevice& pDevice;
 
-    VulkanAttachment shadowAttachment;
-    VulkanTextureDescriptor shadowTexture;
-    VulkanSyncObjects syncObjects;
+  VulkanAttachment shadowAttachment;
+  VulkanTextureDescriptor shadowTexture;
+  VulkanSyncObjects syncObjects;
 
-    public:
-    std::vector<std::vector<VulkanAttachment*>> getAttachmentsPerFrameBuffer () {
-        return { { &shadowAttachment } };
-    }
-    
-    VulkanAttachment* getShadowAttachment (){
-        return &shadowAttachment;
-    }
+ public:
+  std::vector<std::vector<VulkanAttachment*>> getAttachmentsPerFrameBuffer();
 
-    const VulkanTextureDescriptor& getTexture(){
-        return shadowTexture;
-    }
+  VulkanAttachment* getShadowAttachment();
 
-    VulkanShadowMap (VulkanDevice& device, uint width, uint height, VkFormat format)
-    : pDevice (device), syncObjects (device, 1, false, "Shadow Sync "),
-      shadowAttachment (device,
-                        VulkanAttachmentType::ShadowMap,
-                        { width, height },
-                        true, true, createDepthClearValue({1.0f, 0}),
-                        "Shadow Attachment "), shadowTexture(device, shadowAttachment.getImageView(), "Shadow Texture Sampler "){}
-    ~VulkanShadowMap () {
-        destroy ();
-    }
-    const std::function<void()> getFenceResetCallback(){
-        return std::bind (&VulkanShadowMap::waitAndResetFences, this);
-    }
-    const VulkanSyncObjects& getSyncObjects() const{
-        return syncObjects;
-    }
-    void waitAndResetFences () const {
-        vkWaitForFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[0],
-                         VK_TRUE, UINT64_MAX);
-        vkResetFences (pDevice.getDevice (), 1, &syncObjects.inFlightFence[0]);
-    }
+  const VulkanTextureDescriptor& getTexture();
 
-    void destroy () {
-        syncObjects.destroy ();
-        shadowTexture.destroy();
-        shadowAttachment.destroy();
-    }
+  VulkanShadowMap(VulkanDevice& device, uint width, uint height,
+                  VkFormat format);
+  ~VulkanShadowMap();
+  const std::function<void()> getFenceResetCallback();
+  const VulkanSyncObjects& getSyncObjects() const;
+  void waitAndResetFences() const;
+
+  void destroy();
 };

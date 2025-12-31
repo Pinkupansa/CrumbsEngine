@@ -1,11 +1,12 @@
 #define GLFW_INCLUDE_VULKAN
 
-#include "crumb.hpp"
-#include "input_manager.hpp"
-#include "primitive_meshes.hpp"
-#include "scene.hpp"
-#include "vulkan_renderer.hpp"
-#include "vulkan_shader_data.hpp"
+#include "engine_layer/crumb.hpp"
+#include "engine_layer/debug.hpp"
+#include "engine_layer/input_manager.hpp"
+#include "engine_layer/primitive_meshes.hpp"
+#include "engine_layer/scene.hpp"
+#include "vulkan_layer/vulkan_renderer.hpp"
+#include "vulkan_layer/vulkan_shader_data.hpp"
 #include <GLFW/glfw3.h>
 using Clock = std::chrono::high_resolution_clock;
 
@@ -74,14 +75,15 @@ int main () {
 
     // load all texture in the texture folder
     //  go through all files in the textures/ directory
-    int grassBillboardIndex = renderer.loadTexture("textures/grass_billboard.png");
+    int grassBillboardIndex =
+    renderer.loadTexture ("textures/grass_billboard.png");
     int grassIndex       = renderer.loadTexture ("textures/portalfloor.png");
     int grassNormalIndex = renderer.loadTexture ("textures/grass3_normal.jpg");
     int rockwallTexIndex =
     renderer.loadTexture ("textures/cottage_diffuse.png");
 
     int portalgunTexIndex = renderer.loadTexture ("textures/portalgun_col.jpg");
-    int portalgunNormalInex =
+    int portalgunNormalIndex =
     renderer.loadTexture ("textures/portalgun_nor.jpg");
 
     int stonewallNormalMapIndex =
@@ -95,45 +97,60 @@ int main () {
     renderer.buildTextureAtlas ();
 
 
+    VulkanRenderTexture* renderTex =
+    renderer.createRenderTexture ("TransparencyRenderTexture");
+    VulkanRenderTexture* screenRenderTex =
+    renderer.createRenderTexture ("ScreenRenderTexture");
     VulkanShaderData shader1Data ("shaders/lit.frag", true, true, VulkanAlphaBlendMode::None);
 
-    VulkanShaderData shader2Data ("shaders/unlit.frag", true, true, VulkanAlphaBlendMode::None);
+    VulkanShaderData shader2Data ("shaders/unlit.frag", true, true,
+                                  VulkanAlphaBlendMode::None);
+
+    shader1Data.bindTargetRenderTexture (*screenRenderTex);
+    shader2Data.bindTargetRenderTexture (*screenRenderTex);
 
 
-    VulkanRenderTexture* renderTex = renderer.createRenderTexture ("helo");
-
-    VulkanShaderData transparencyShader ("shaders/transparent.frag", true, false, VulkanAlphaBlendMode::Additive);
+    VulkanShaderData transparencyShader ("shaders/transparent.frag", true,
+                                         false, VulkanAlphaBlendMode::Additive);
     transparencyShader.bindTargetRenderTexture (*renderTex);
 
     VulkanShaderData transparencyResolveShader (
-    "shaders/transparency_resolve.frag", false, false, VulkanAlphaBlendMode::Weighted, true, nullptr, nullptr, nullptr, VK_CULL_MODE_NONE);
+    "shaders/transparency_resolve.frag", false, false, VulkanAlphaBlendMode::Weighted,
+    true, nullptr, nullptr, nullptr, VK_CULL_MODE_NONE);
     transparencyResolveShader.bindSourceRenderTexture (*renderTex);
+    transparencyResolveShader.bindTargetRenderTexture (*screenRenderTex);
+    
+    VulkanShaderData postprocessingShader("shaders/postprocessing.frag", false, false, VulkanAlphaBlendMode::None, true, nullptr, nullptr, nullptr, VK_CULL_MODE_NONE);
+    postprocessingShader.bindSourceRenderTexture (*screenRenderTex);
+
 
     int litShaderIndex         = renderer.loadShader (shader1Data);
     int unlitShaderIndex       = renderer.loadShader (shader2Data);
     int transparentShaderIndex = renderer.loadShader (transparencyShader);
     int transparentResolveShaderIndex = renderer.loadShader (transparencyResolveShader);
+    int postprocessingShaderIndex = renderer.loadShader (postprocessingShader);
 
+    
 
     Mesh windowMesh     = generateQuad ();
     int windowMeshIndex = renderer.loadMesh (windowMesh);
 
     Material mWindow (transparentShaderIndex);
-    mWindow.setProperty ("tint", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+    mWindow.setProperty ("tint", glm::vec4 (1.0f, 1.0f, 1.0f, 1.0f));
     mWindow.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassBillboardIndex));
-    mWindow.setProperty("relativeTextureSize", renderer.getRelativeTextureSize (grassBillboardIndex));
+    mWindow.setProperty ("relativeTextureSize",
+                         renderer.getRelativeTextureSize (grassBillboardIndex));
     mWindow.setProperty ("tilingFactor", glm::vec2 (1.0f));
     RenderData windowRenderData (windowMeshIndex, mWindow, false);
     Crumb windowObj (windowRenderData);
-    windowObj.transform.position        = { 0, 0.2f, 0 };
+    windowObj.transform.position = { 0, 0.2f, 0 };
 
 
-
-    Material mWindow2(transparentShaderIndex);
-    mWindow2.setProperty("tint", glm::vec4(1.0f, 0.0f, 0.0f, 0.2f));
+    Material mWindow2 (transparentShaderIndex);
+    mWindow2.setProperty ("tint", glm::vec4 (1.0f, 0.0f, 0.0f, 0.2f));
     RenderData windowRenderData2 (windowMeshIndex, mWindow2, false);
     Crumb windowObj2 (windowRenderData2);
-    windowObj2.transform.position        = { 0.2f, 0.5f, 0 };
+    windowObj2.transform.position = { 0.2f, 0.5f, 0 };
 
 
     Material mPortal (litShaderIndex);
@@ -141,9 +158,9 @@ int main () {
     mPortal.setProperty ("relativeTextureSize",
                          renderer.getRelativeTextureSize (portalgunTexIndex));
     mPortal.setProperty ("normalmapAtlasOffset",
-                         renderer.getRelativeTextureSize (portalgunNormalInex));
+                         renderer.getRelativeTextureSize (portalgunNormalIndex));
     mPortal.setProperty ("normalmapRelativeTextureSize",
-                         renderer.getRelativeTextureSize (portalgunNormalInex));
+                         renderer.getRelativeTextureSize (portalgunNormalIndex));
     mPortal.setProperty ("tilingFactor", glm::vec2 (1.0f));
     mPortal.setProperty ("specularity", 1.0f);
     RenderData portalGunRenderData (portalGunMeshIndex, mPortal);
@@ -167,8 +184,9 @@ int main () {
     sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
 
     Material m2 (litShaderIndex);
-    m2.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassBillboardIndex));
-    m2.setProperty ("relativeTextureSize", renderer.getRelativeTextureSize (grassBillboardIndex));
+    m2.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassIndex));
+    m2.setProperty ("relativeTextureSize",
+                    renderer.getRelativeTextureSize (grassIndex));
     m2.setProperty ("tilingFactor", glm::vec2 (10.0f));
 
     RenderData floorRenderData (quadIndex, m2);

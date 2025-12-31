@@ -1,23 +1,22 @@
-#pragma once 
-#include "transform.hpp"
+#pragma once
 #include "render_data.hpp"
+#include "transform.hpp"
 #include <optional>
 
-class Scene; 
+class Scene;
 /*Game entity class*/
-class Crumb{ 
-    private: 
-        Scene* m_scene;
-    public: 
-        Transform transform;
-        std::optional<RenderData> renderData;
+class Crumb {
+ private:
+  Scene* m_scene;
 
-        Crumb(Transform& transform): transform(transform){}
-        Crumb(){}
-        Crumb(RenderData& renderData): renderData(renderData){}
-        Crumb(Transform& transform, RenderData& renderData): transform(transform), renderData(renderData){}
-        
-        void onSceneAdd(Scene* scene){
-            m_scene = scene;
-        }
+ public:
+  Transform transform;
+  std::optional<RenderData> renderData;
+
+  Crumb(Transform& transform);
+  Crumb();
+  Crumb(RenderData& renderData);
+  Crumb(Transform& transform, RenderData& renderData);
+
+  void onSceneAdd(Scene* scene);
 };

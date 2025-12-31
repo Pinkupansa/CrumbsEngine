@@ -24,8 +24,7 @@ file(GLOB_RECURSE HEADERS "include/*.h" "include/*.hpp")
 add_executable(vulkan_test ${SOURCES} ${HEADERS})
 
 target_include_directories(vulkan_test PRIVATE
-    include/vulkan_layer
-    include/engine_layer
+    include
     ${Vulkan_INCLUDE_DIRS}
     ${GLFW_INCLUDE_DIRS}
 )

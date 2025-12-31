@@ -1,19 +1,18 @@
 #pragma once
 #include <cstdint>
 #include <glm/glm.hpp>
-#include "fsb_object.hpp"
+#include "vulkan_layer/fsb_object.hpp"
+
 // engine level material definition
 // can be converted to vulkan level descriptor set later
 
 struct Material {
-    int shaderIndex;
-    FSBObject materialProperties;
-    Material (int shaderIndex, FSBObject materialProperties): shaderIndex(shaderIndex){}
-    Material(int shaderIndex) : shaderIndex(shaderIndex){}
+  int shaderIndex;
+  FSBObject materialProperties;
+  Material(int shaderIndex, FSBObject materialProperties);
+  Material(int shaderIndex);
 
-    void setProperty(std::string name, UniformVariant value){
-      materialProperties[name] = value;
-    }
+  void setProperty(std::string name, UniformVariant value);
 };
 
-static const Material DEFAULT_MATERIAL = {0};
+extern const Material DEFAULT_MATERIAL;

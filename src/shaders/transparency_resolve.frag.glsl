@@ -15,8 +15,4 @@ void main(){
     vec4 sampleColor = texture(transparencyRenderTexture, gl_FragCoord.xy/textureSize(transparencyRenderTexture, 0));
     vec3 rgb = sampleColor.a > 0.0 ? sampleColor.rgb / sampleColor.a : vec3(0.0);
     outColor = vec4(rgb, sampleColor.a);
-
- 
-    
-
 }
