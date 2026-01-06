@@ -10,6 +10,7 @@ glm::mat4 computeLightView(const glm::vec3& lightDir,
 struct VulkanSceneUBO {
   glm::mat4 view;      // caméra principale
   glm::mat4 proj;      // projection principale
+  glm::mat4 invViewProj;
   glm::mat4 lightView; // vue de la lumière
   glm::mat4 lightProj; // projection orthographique pour shadow map
   alignas(16) glm::vec3 lightColor; // alignement 16 bytes Vulkan

@@ -17,7 +17,7 @@ class VulkanSyncObjects {
   bool isSwapchain;  // hacky, to change
   int currentSyncIndex;
   uint32_t currentFrame;
-  VkFence getFence(int syncIndex) const;
+  const VkFence* getFence(int syncIndex) const;
   bool hasWaitSemaphore(bool isFirstPass) const;
 
   void setCurrentFrame(uint32_t newFrame);
@@ -34,6 +34,7 @@ class VulkanSyncObjects {
                     bool isSwapchain, std::string name = "Swapchain Sync ");
 
   ~VulkanSyncObjects();
+
 
   void destroy();
 };

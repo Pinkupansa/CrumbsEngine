@@ -11,7 +11,6 @@ class VulkanDevice {
   VkDevice device;
   VkQueue graphicsQueue;
   uint32_t graphicsFamilyIndex;
-  VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
   VkCommandPool commandPool;
 

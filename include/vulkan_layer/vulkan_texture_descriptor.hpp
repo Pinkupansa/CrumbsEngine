@@ -17,8 +17,10 @@ class VulkanTextureDescriptor {
 
  public:
   const VulkanDescriptorData getDescData(int binding, int set) const;
-  VulkanTextureDescriptor(const VulkanDevice& device, VkImageView imageView,
-                          std::string name);
+  VulkanTextureDescriptor(
+    const VulkanDevice& device,
+    VkImageView imageView,
+    std::string name);
 
   ~VulkanTextureDescriptor();
   void destroy();

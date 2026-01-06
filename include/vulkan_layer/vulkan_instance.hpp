@@ -21,7 +21,7 @@ class VulkanInstance {
   void setupDebugMessenger();
 
  public:
-  VulkanInstance(GLFWwindow* window);
+  VulkanInstance();
 
   ~VulkanInstance();
 

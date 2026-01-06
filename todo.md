@@ -5,11 +5,11 @@
 - Raytracing ? 
 - OS Support
 - Gizmos support
-- Billboards 
-- Sort non shadow objects 
-- Transparency
 - rewrite syncobjects which is currently tailored for the swapchain
-- rewrite texture bundle to use texture
+- rewrite texture bundle to use texturedescriptor
+- instancing
+- dont re-record, only update uniform buffers 
+
 ## Engine Layer
 ### Graphics Engine
 

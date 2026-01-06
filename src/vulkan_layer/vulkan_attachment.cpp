@@ -26,18 +26,20 @@ bool VulkanAttachment::isColorResolveAttachment () const {
 }
 
 VkAttachmentDescription VulkanAttachment::createAttachmentDesc () {
-    VkAttachmentLoadOp loadOp = alreadyBound? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+    VkAttachmentLoadOp loadOp =
+    alreadyBound ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+    VkImageLayout initialLayout = !alreadyBound? VK_IMAGE_LAYOUT_UNDEFINED : finalLayout;
     alreadyBound = true;
+    
     switch (type) {
     case VulkanAttachmentType::Color:
-        return createColorAttachment (isSinglesampled, loadOp, finalLayout);
+        return createColorAttachment (isSinglesampled, loadOp, initialLayout, finalLayout);
 
-    case VulkanAttachmentType::Depth: return createDepthAttachment (loadOp);
+    case VulkanAttachmentType::Depth: return createDepthAttachment (loadOp, initialLayout, finalLayout);
 
     case VulkanAttachmentType::ShadowMap:
         return createShadowDepthAttachment (loadOp);
     }
-   
 }
 
 VkExtent2D VulkanAttachment::getExtent () const {
@@ -51,19 +53,20 @@ VulkanAttachment::VulkanAttachment (const VulkanDevice& device,
                                     bool isSinglesampled,
                                     VkClearValue clearValue,
                                     std::string name,
-                                    bool isSampleable,
-                                    VkImageLayout finalLayout)
+                                    VkImageLayout finalLayout,
+                                    bool isSampleable)
 : device (device), extent (extent), type (type), isImageCreator (true),
   clearValue (clearValue), finalLayout (finalLayout), isResolve (isResolve),
   isSinglesampled (isSinglesampled), alreadyBound (false) {
+    std::string suffix = isResolve ? " Resolve Image" : " Color Image";
     switch (type) {
     case VulkanAttachmentType::Color:
         image =
-        createColorImage (device, extent, isSinglesampled, name + " Color Image",
+        createColorImage (device, extent, isSinglesampled, name + suffix,
                           isSampleable ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT :
                                          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
         memory = allocateAndBindImageMemory (device, image);
-        imageView = createColorImageView (device, image, name + " Color Image View");
+        imageView = createColorImageView (device, image, name + suffix + " View");
 
         break;
     case VulkanAttachmentType::Depth:
@@ -99,7 +102,7 @@ VulkanAttachment::VulkanAttachment (const VulkanDevice& device,
                                     VkImageLayout finalLayout)
 : device (device), type (type), image (image), extent (extent),
   isImageCreator (false), isResolve (isResolve), isSinglesampled (isSinglesampled),
-  finalLayout (finalLayout), alreadyBound (false) {
+  clearValue (clearValue), finalLayout (finalLayout), alreadyBound (false) {
     // used for swapchain images
     switch (type) {
     case VulkanAttachmentType::Color:

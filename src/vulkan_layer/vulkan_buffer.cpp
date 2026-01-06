@@ -9,9 +9,9 @@
 
 const VkBuffer& VulkanBuffer::getBuffer() const { return buffer; }
 
-const bool VulkanBuffer::isDynamic() const { return dynamic; }
+bool VulkanBuffer::isDynamic() const { return dynamic; }
 
-const VkDeviceSize VulkanBuffer::getAlignedObjectSize() const {
+VkDeviceSize VulkanBuffer::getAlignedObjectSize() const {
   return alignedObjectSize;
 }
 
@@ -20,7 +20,6 @@ VulkanBuffer::VulkanBuffer(const VulkanDevice& deviceRef, VulkanBufferType type,
                            VkDeviceSize alignedObjectSize, std::string name)
     : device(deviceRef),
       type(type),
-      size(size),
       dynamic(dynamic),
       alignedObjectSize(alignedObjectSize) {
   buffer = createBuffer(device, type, size, name);
@@ -49,4 +48,4 @@ void VulkanBuffer::update(const void* data, VkDeviceSize size,
   vkUnmapMemory(device.getDevice(), memory);
 }
 
-const VkDeviceSize VulkanBuffer::getSize() const { return size; }
+

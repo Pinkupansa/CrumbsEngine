@@ -12,6 +12,7 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 view;
     mat4 proj;
+    mat4 invProjView; // <-- precompute on CPU
     mat4 lightView;
     mat4 lightProj;
     vec3 lightColor;
@@ -34,6 +35,7 @@ layout(set = 4, binding = 0) uniform CustomUBO{
     vec2 relativeTextureSize;
     vec2 tilingFactor;
 } customProps;
+
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 
 
@@ -91,7 +93,11 @@ vec4 computeTexColor(vec2 uv, vec2 atlasOffset, vec2 relativeTexSixe, vec2 tilin
     return sampleAtlasAA(uv, atlasOffset, relativeTexSixe, tilingFactor);
 }
 
+vec4 encodeVector(vec3 v){
+    return vec4(0.5 + atan(v)/3.141592653589793, 1.0);
+}
 void main() {
     vec3 textureColor = computeTexColor(fragUV, customProps.atlasOffset, customProps.relativeTextureSize, customProps.tilingFactor, fragCamPos.z).rgb;
-    outColor = vec4(textureColor, 1);
+    outColor = vec4(textureColor, 1) +  vec4(pow((dot(scene.lightDir, fragWorldPos/length(fragWorldPos)) + 1)/2, 100)*1) * vec4(scene.lightColor, 1);
+
 }

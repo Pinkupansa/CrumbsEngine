@@ -12,6 +12,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 view;
     mat4 proj;
+    mat4 invProjView; // <-- precompute on CPU
     mat4 lightView;
     mat4 lightProj;
     vec3 lightColor;

@@ -163,7 +163,7 @@ Mesh importMesh(std::string meshPath) {
              std::to_string(scene->mNumMeshes) + " meshes.");
   for (unsigned int m = 0; m < scene->mNumMeshes; ++m) {
     aiMesh* mesh = scene->mMeshes[m];
-    uint32_t baseVertexIndex = vertices.size();
+    int baseVertexIndex = vertices.size();
     for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
       aiVector3D pos = mesh->mVertices[v];
       vertices.emplace_back(pos.x, pos.y, pos.z);

@@ -15,7 +15,7 @@ class Scene {
   glm::vec3 lightDir;
   glm::vec3 lightColor;
 
-  const bool hasCamera() const;
+  bool hasCamera() const;
   const Camera* getMainCamera() const;
   void setCamera(Camera& camera);
   void addCrumb(Crumb& crumb);

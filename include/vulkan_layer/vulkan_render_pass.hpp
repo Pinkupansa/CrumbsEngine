@@ -13,12 +13,13 @@ class VulkanRenderPass {
     std::vector<VkClearValue> clearValues;
     bool hasResolve;
     bool isFirstPass;
-
+    int nColorAttachments;
     public:
+    int getNColorAttachments () const;
     std::vector<VkClearValue> getClearValues () const;
     const VkRenderPass& getRenderPass () const;
 
-    const bool hasResolveAttachment () const; // used to set nRasterizationSamples
+    bool hasResolveAttachment () const; // used to set nRasterizationSamples
                                               // in pipeline
 
     VkAttachmentLoadOp getLoadOp ();

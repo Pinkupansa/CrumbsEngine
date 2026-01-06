@@ -8,10 +8,13 @@ layout(location = 4) in vec2 fragUV;
 layout(location = 5) in vec4 fragCamPos;
 layout(location = 0) out vec4 outColor;
 
+
+
 // Scene UBO
 layout(set = 0, binding = 0) uniform SceneUBO {
     mat4 view;
     mat4 proj;
+    mat4 invProjView; // <-- precompute on CPU
     mat4 lightView;
     mat4 lightProj;
     vec3 lightColor;
@@ -196,6 +199,10 @@ float computeShadow(vec4 lightSpacePos){
 vec3 computeAmbient(vec3 N){
     return mix(scene.groundColor, scene.skyColor, N.y * 0.5 + 0.5)*0.01;
 }
+
+vec4 encodeVector(vec3 v){
+    return vec4(v, 1.0);
+}
 void main() {
     vec3 textureColor = computeTexColor(fragUV, customProps.atlasOffset, customProps.relativeTextureSize, customProps.tilingFactor, fragCamPos.z).rgb;
 
@@ -242,8 +249,7 @@ void main() {
    
     
     vec3 lighting = (diffuse*textureColor + specular) * shadow * scene.lightColor + computeAmbient(N);
-    //vec3 lighting = textureColor;
-    //vec3 lighting = vec3(shadow, shadow, shadow);
+
     outColor = vec4(lighting, 1.0);
 
 }

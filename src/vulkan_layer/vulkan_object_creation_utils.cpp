@@ -89,21 +89,22 @@ VkImageView createDepthImageView(const VulkanDevice& device,
 VkSwapchainKHR createTripleBufferingSwapchain(const VulkanDevice& device,
                                               const VulkanSurface& surface,
                                               std::string name) {
-  VkSwapchainCreateInfoKHR swapchainInfo{};
-  swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  swapchainInfo.surface = surface.getSurface();
-  swapchainInfo.minImageCount = 3;  // triple buffering
-  swapchainInfo.imageFormat = DEFAULT_COLOR_FORMAT;  // pick first supported format
-  swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-  swapchainInfo.imageExtent = surface.getCapabilities().currentExtent;
-  swapchainInfo.imageArrayLayers = 1;  // just means 2d image
-  swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-  swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  swapchainInfo.preTransform = surface.getCapabilities().currentTransform;
-  swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  swapchainInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // no VSync
-  swapchainInfo.clipped = VK_TRUE;
-  swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
+    VkSwapchainCreateInfoKHR swapchainInfo{};
+    swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainInfo.surface = surface.getSurface();
+    swapchainInfo.minImageCount = 3;  // triple buffering
+    swapchainInfo.imageFormat = DEFAULT_COLOR_FORMAT;  // pick first supported format
+    swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    
+    swapchainInfo.imageExtent = surface.getCapabilities().currentExtent;
+    swapchainInfo.imageArrayLayers = 1;  // just means 2d image
+    swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchainInfo.preTransform = surface.getCapabilities().currentTransform;
+    swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainInfo.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;  // no VSync
+    swapchainInfo.clipped = VK_TRUE;
+    swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
 
   VkSwapchainKHR swapchain;
   if (vkCreateSwapchainKHR(device.getDevice(), &swapchainInfo, nullptr,
@@ -167,7 +168,7 @@ VkDeviceMemory allocateAndBindBufferMemory(const VulkanDevice& device,
 }
 
 VkAttachmentDescription createColorAttachment(
-    bool isSingleSampled, VkAttachmentLoadOp loadOp, VkImageLayout finalLayout) {
+    bool isSingleSampled, VkAttachmentLoadOp loadOp, VkImageLayout initialLayout, VkImageLayout finalLayout) {
   VkAttachmentDescription colorAttachment;
   colorAttachment.format = DEFAULT_COLOR_FORMAT;  // same as swapchain
   colorAttachment.samples =
@@ -177,10 +178,7 @@ VkAttachmentDescription createColorAttachment(
       VK_ATTACHMENT_STORE_OP_STORE;  // store result for presentation
   colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  colorAttachment.initialLayout =
-      loadOp == VK_ATTACHMENT_LOAD_OP_LOAD
-          ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-          : VK_IMAGE_LAYOUT_UNDEFINED;
+  colorAttachment.initialLayout = initialLayout;
   colorAttachment.finalLayout = finalLayout;
   colorAttachment.flags = 0;
   return colorAttachment;
@@ -194,7 +192,7 @@ VkAttachmentReference createColorAttachmentRef(int attachmentNumber) {
   return colorAttachmentRef;
 }
 
-VkAttachmentDescription createDepthAttachment(VkAttachmentLoadOp loadOp) {
+VkAttachmentDescription createDepthAttachment(VkAttachmentLoadOp loadOp, VkImageLayout initialLayout, VkImageLayout finalLayout) {
   VkAttachmentDescription depthAttachment{};
   depthAttachment.format = DEFAULT_DEPTH_FORMAT;  // the same format as your depth image
   depthAttachment.samples = MSAA_LEVEL;
@@ -203,11 +201,8 @@ VkAttachmentDescription createDepthAttachment(VkAttachmentLoadOp loadOp) {
       VK_ATTACHMENT_STORE_OP_STORE;  // depth must be preserved throughout passes
   depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  depthAttachment.initialLayout =
-      loadOp == VK_ATTACHMENT_LOAD_OP_LOAD
-          ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-          : VK_IMAGE_LAYOUT_UNDEFINED;
-  depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+  depthAttachment.initialLayout = initialLayout;
+  depthAttachment.finalLayout = finalLayout;
   return depthAttachment;
 }
 VkAttachmentDescription createShadowDepthAttachment(VkAttachmentLoadOp loadOp) {
@@ -439,6 +434,27 @@ createVertexShaderStageCreateInfo(const VkShaderModule& vertexShaderModule) {
   vertShaderStageInfo.pName = "main";
   return vertShaderStageInfo;
 }
+void writeImageInDescriptorSet(const VulkanDevice& device,
+                               const VkImageView& imageView,
+                               const VkDescriptorSet& descSet,
+                               uint32_t binding) {
+
+  VkDescriptorImageInfo imageInfo{};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView = imageView;
+  imageInfo.sampler = VK_NULL_HANDLE; // MUST be null for SAMPLED_IMAGE
+
+  VkWriteDescriptorSet write{};
+  write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  write.dstSet = descSet;
+  write.dstBinding = binding;
+  write.dstArrayElement = 0;
+  write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  write.descriptorCount = 1;
+  write.pImageInfo = &imageInfo;
+
+  vkUpdateDescriptorSets(device.getDevice(), 1, &write, 0, nullptr);
+}
 
 VkPipelineShaderStageCreateInfo
 createFragmentShaderStageCreateInfo(const VkShaderModule& fragmentShaderModule) {
@@ -579,14 +595,13 @@ VkPipelineColorBlendAttachmentState createWeightedAlphaBlendAttachment() {
   blend.alphaBlendOp = VK_BLEND_OP_ADD;
   return blend;
 }
-VkPipelineColorBlendStateCreateInfo createColorBlendStateInfo(
-    const VkPipelineColorBlendAttachmentState& colorBlendAttachment) {
+VkPipelineColorBlendStateCreateInfo createColorBlendStateInfo(const std::vector<VkPipelineColorBlendAttachmentState>& colorBlendAttachment) {
   VkPipelineColorBlendStateCreateInfo colorBlending{};
   colorBlending.sType =
       VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = 1;
-  colorBlending.pAttachments = &colorBlendAttachment;
+  colorBlending.attachmentCount = colorBlendAttachment.size();
+  colorBlending.pAttachments = colorBlendAttachment.data();
   return colorBlending;
 }
 
@@ -957,7 +972,6 @@ std::vector<uint8_t> padImageRGBA(const std::vector<uint8_t>& srcPixels,
                   4);  // bottom
     }
   }
-  float dt = std::chrono::duration<float>(Clock::now() - time).count();
 
   return out;
 }

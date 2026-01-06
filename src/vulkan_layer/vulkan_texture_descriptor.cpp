@@ -10,22 +10,25 @@ const VulkanDescriptorData VulkanTextureDescriptor::getDescData(int binding,
                                                                 int set) const {
   return {descSet, descLayout, descPool, false, 0, binding, set};
 }
-VulkanTextureDescriptor::VulkanTextureDescriptor(const VulkanDevice& device,
-                                                 VkImageView imageView,
-                                                 std::string name)
+VulkanTextureDescriptor::VulkanTextureDescriptor(
+    const VulkanDevice& device,
+    VkImageView imageView,
+    std::string name)
     : device(device) {
-  sampler = createSampler(device, name + " Sampler");
-  descLayout = createDescriptorLayout(
-      device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-      VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-  descPool =
-      createDescriptorPool(device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    sampler = createSampler(device, name + " Sampler");
+    descLayout = createDescriptorLayout(
+        device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+    descPool =
+        createDescriptorPool(device, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-  descSet =
-      allocateDescriptorSet(device, descLayout, descPool, name + " Descriptor Set");
+    descSet = allocateDescriptorSet(
+        device, descLayout, descPool, name + " Descriptor Set");
 
-  writeImageSamplerInDescriptorSet(device, imageView, sampler, descSet);
+    writeImageSamplerInDescriptorSet(device, imageView, sampler, descSet);
+  
 }
+
 
 VulkanTextureDescriptor::~VulkanTextureDescriptor() { destroy(); }
 void VulkanTextureDescriptor::destroy() {

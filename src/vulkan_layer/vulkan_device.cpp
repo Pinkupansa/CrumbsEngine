@@ -34,9 +34,9 @@ VulkanDevice::VulkanDevice(VulkanInstance& instance) {
 
   // Print available devices
   std::cout << "Available Vulkan devices:\n";
-  for (const auto& device : devices) {
+  for (const auto& dev : devices) {
     VkPhysicalDeviceProperties props;
-    vkGetPhysicalDeviceProperties(device, &props);
+    vkGetPhysicalDeviceProperties(dev, &props);
     std::cout << " - " << props.deviceName << "\n";
   }
 
@@ -90,9 +90,7 @@ VulkanDevice::VulkanDevice(VulkanInstance& instance) {
   VkPhysicalDeviceDescriptorIndexingFeatures indexing{};
   indexing.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-  indexing.descriptorBindingPartiallyBound = VK_TRUE;
-  indexing.runtimeDescriptorArray = VK_TRUE;  // usually needed
-  indexing.descriptorBindingVariableDescriptorCount = VK_TRUE;
+
 
   VkPhysicalDeviceFeatures features = {};
   features.samplerAnisotropy = VK_TRUE;

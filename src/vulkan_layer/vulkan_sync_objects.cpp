@@ -3,8 +3,8 @@
 #include "vulkan_layer/vulkan_device.hpp"
 #include <stdexcept>
 
-VkFence VulkanSyncObjects::getFence(int syncIndex) const {
-  return inFlightFence[syncIndex];
+const VkFence* VulkanSyncObjects::getFence(int syncIndex) const{
+  return &inFlightFence[syncIndex];
 }
 bool VulkanSyncObjects::hasWaitSemaphore(bool isFirstPass) const {
   return !isFirstPass || isSwapchain;

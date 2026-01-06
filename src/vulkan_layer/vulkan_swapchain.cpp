@@ -22,9 +22,9 @@ const VulkanSyncObjects& VulkanSwapchain::getSyncObjects() { return syncObjects;
 
 std::vector<std::vector<VulkanAttachment*>>
 VulkanSwapchain::getAttachmentsPerFrameBuffer() {
-  return {{msaaColorAttachments[0], depthAttachment, swapchainAttachments[0]},
-          {msaaColorAttachments[1], depthAttachment, swapchainAttachments[1]},
-          {msaaColorAttachments[2], depthAttachment, swapchainAttachments[2]}};
+  return {{msaaColorAttachments[0], swapchainAttachments[0]},
+          {msaaColorAttachments[1], swapchainAttachments[1]},
+          {msaaColorAttachments[2], swapchainAttachments[2]}};
 }
 VulkanSwapchain::VulkanSwapchain(VulkanDevice& device, VulkanSurface& surface)
     : pDevice(device), syncObjects(device, 3, true) {
@@ -43,8 +43,8 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice& device, VulkanSurface& surface)
   for (int i = 0; i < imageCount; i++) {
     VulkanAttachment* msaaColorAttachment = new VulkanAttachment(
         device, VulkanAttachmentType::Color, surface.getCapabilities().currentExtent,
-        false, false, createColorClearValue({0, 0, 0, 0}),
-        "MSAA Color Attachment " + std::to_string(i));
+        false, false, createColorClearValue(VkClearColorValue({0, 0, 0, 0})),
+        "MSAA Color Attachment " + std::to_string(i), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     msaaColorAttachments.push_back(msaaColorAttachment);
   }
 
@@ -54,14 +54,14 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice& device, VulkanSurface& surface)
         device, VulkanAttachmentType::Color, swapchainImages[i],
         surface.getCapabilities().currentExtent, true, true,
         createColorClearValue({0, 0, 0, 0}),
-        "Swapchain Attachment " + std::to_string(i));
+        "Swapchain Attachment " + std::to_string(i), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     swapchainAttachments.push_back(swapchainAttachment);
   }
 
   depthAttachment = new VulkanAttachment(
       device, VulkanAttachmentType::Depth,
       surface.getCapabilities().currentExtent, false, false,
-      createDepthClearValue({1.0f, 0}), "Main Depth Attachment ");
+      createDepthClearValue({1.0f, 0}), "Main Depth Attachment ", VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }
 
 void VulkanSwapchain::present() {

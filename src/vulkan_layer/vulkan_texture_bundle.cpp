@@ -101,8 +101,8 @@ VkExtent3D VulkanTextureBundle::roundMaxDimToPowerOfTwo (VkExtent3D srcTexSize) 
     if (texSize.width >= texSize.height) {
         if (texSize.width != 1 << ceiledLog2 (texSize.width)) {
             texSize.height =
-            (int)(texSize.height * 1 << (ceiledLog2 (texSize.width) - 1)) /
-            (float)texSize.width;
+            (int)((texSize.height * 1 << (ceiledLog2 (texSize.width) - 1)) /
+            (float)texSize.width);
             texSize.width = 1 << (ceiledLog2 (texSize.width) - 1);
         }
     }
@@ -110,8 +110,8 @@ VkExtent3D VulkanTextureBundle::roundMaxDimToPowerOfTwo (VkExtent3D srcTexSize) 
     else if (texSize.height > texSize.width) {
         if (texSize.height != 1 << ceiledLog2 (texSize.height)) {
             texSize.width =
-            (int)(texSize.width * 1 << (ceiledLog2 (texSize.height) - 1)) /
-            (float)texSize.height;
+            (int)((texSize.width * 1 << (ceiledLog2 (texSize.height) - 1)) /
+            (float)texSize.height);
             texSize.height = 1 << (ceiledLog2 (texSize.height) - 1);
         }
     }
@@ -121,8 +121,8 @@ VkExtent3D VulkanTextureBundle::roundMaxDimToPowerOfTwo (VkExtent3D srcTexSize) 
 // ------------------------------------------------------------
 // Texture loading: creates N_MIPMAPS textures per input
 // ------------------------------------------------------------
-uint32_t VulkanTextureBundle::addTexture (const std::string& filename) {
-    uint32_t index = textureImages[0].size ();
+int VulkanTextureBundle::addTexture (const std::string& filename) {
+    int index = textureImages[0].size ();
 
     std::vector<VkImage> mipImages;
     std::vector<VkDeviceMemory> mipMemories;

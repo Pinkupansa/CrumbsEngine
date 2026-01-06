@@ -11,6 +11,8 @@
 #include "vulkan_layer/vulkan_render_pass.hpp"
 #include <stdexcept>
 #include <vector>
+using Clock = std::chrono::high_resolution_clock;
+
 
 VulkanCommandBuffers::VulkanCommandBuffers(
     const VulkanDevice& device, const VulkanFramebuffers& framebuffers)
@@ -62,10 +64,8 @@ void VulkanCommandBuffers::record(
   }
 
   vkResetCommandBuffer(commandBuffers[commandBufferIndex], 0);
-  const auto& fbos = framebuffers.getFramebuffers();
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
   if (vkBeginCommandBuffer(commandBuffers[commandBufferIndex], &beginInfo) !=
       VK_SUCCESS)
     throw std::runtime_error("Failed to begin recording command buffer!");
@@ -103,7 +103,10 @@ void VulkanCommandBuffers::record(
 
     // TODO : split in dynamic and non dynamic descriptors and bind dynamic in
     // loop
+    
     for (size_t j = 0; j < meshDrawIndices.size(); ++j) {
+      auto start = Clock::now();
+     
       for (VulkanDescriptorData desc : dynamicDescriptors) {
         uint32_t dynamicOffset =
             static_cast<uint32_t>(desc.alignedObjectSize * j);
@@ -126,6 +129,7 @@ void VulkanCommandBuffers::record(
                        0                     // first instance
       );
     }
+
   }
 
   vkCmdEndRenderPass(commandBuffers[commandBufferIndex]);

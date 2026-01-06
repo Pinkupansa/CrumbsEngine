@@ -8,7 +8,7 @@
 #include "vulkan_device.hpp"
 #include <glm/glm.hpp>
 
-class VulkanDescriptorData;
+struct VulkanDescriptorData;
 
 // ================= CONFIG =================
 #define N_MIPMAPS 10
@@ -50,7 +50,7 @@ class VulkanTextureBundle {
   // ------------------------------------------------------------
   // Texture loading: creates N_MIPMAPS textures per input
   // ------------------------------------------------------------
-  uint32_t addTexture(const std::string& filename);
+  int addTexture(const std::string& filename);
 
   void pasteTextureOnAtlas(uint32_t textureIndex, VkOffset3D offset);
 

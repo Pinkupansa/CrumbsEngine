@@ -24,6 +24,7 @@ void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
                               crumb.renderData.value ().castsShadows);
 }
 void renderScene (VulkanRenderer& renderer, Scene& scene) {
+
     if (!scene.hasCamera ()) {
         Debug::LogWarning ("Scene has no camera !");
     }
@@ -32,6 +33,7 @@ void renderScene (VulkanRenderer& renderer, Scene& scene) {
     for (Crumb* crumb : scene.getAllCrumbs ()) {
         renderCrumb (renderer, *crumb);
     }
+
 }
 int main () {
     if (!glfwInit ()) {
@@ -48,16 +50,17 @@ int main () {
     glfwCreateWindow (width, height, "Vulkan Window", nullptr, nullptr);
 
     VulkanRenderer renderer (window, width, height);
+ Debug::Log("hello");
 
     Mesh portalgunMesh          = loadOBJShared ("portalgun.obj");
     uint32_t portalGunMeshIndex = renderer.loadMesh (portalgunMesh);
-
+ Debug::Log("hello");
     Mesh quadMesh      = generateQuad ();
     uint32_t quadIndex = renderer.loadMesh (quadMesh);
-
+ Debug::Log("hello");
     Mesh sphere          = importMesh ("cottage_fbx.fbx");
     uint32_t sphereIndex = renderer.loadMesh (sphere);
-
+ Debug::Log("hello");
     Mesh debugTextureQuad          = generateQuad ();
     uint32_t debugTextureQuadIndex = renderer.loadMesh (debugTextureQuad);
     glm::mat4 debugTextureQuadModel =
@@ -65,7 +68,7 @@ int main () {
                                 { 0.0f, -15.0f, -3.0f }),
                 glm::vec3 (10.0f));
 
-
+ Debug::Log("hello");
     Mesh dragon          = importMesh ("dragon.fbx");
     uint32_t dragonIndex = renderer.loadMesh (dragon);
 
@@ -97,10 +100,10 @@ int main () {
     renderer.buildTextureAtlas ();
 
 
-    VulkanRenderTexture* renderTex =
-    renderer.createRenderTexture ("TransparencyRenderTexture");
+    VulkanRenderTexture* transparencyRenderTex =
+    renderer.createRenderTexture ("TransparencyRenderTexture", 1);
     VulkanRenderTexture* screenRenderTex =
-    renderer.createRenderTexture ("ScreenRenderTexture");
+    renderer.createRenderTexture ("ScreenRenderTexture", 1);
     VulkanShaderData shader1Data ("shaders/lit.frag", true, true, VulkanAlphaBlendMode::None);
 
     VulkanShaderData shader2Data ("shaders/unlit.frag", true, true,
@@ -112,16 +115,17 @@ int main () {
 
     VulkanShaderData transparencyShader ("shaders/transparent.frag", true,
                                          false, VulkanAlphaBlendMode::Additive);
-    transparencyShader.bindTargetRenderTexture (*renderTex);
+    transparencyShader.bindTargetRenderTexture (*transparencyRenderTex);
 
     VulkanShaderData transparencyResolveShader (
-    "shaders/transparency_resolve.frag", false, false, VulkanAlphaBlendMode::Weighted,
-    true, nullptr, nullptr, nullptr, VK_CULL_MODE_NONE);
-    transparencyResolveShader.bindSourceRenderTexture (*renderTex);
+    "shaders/transparency_resolve.frag", true, false, VulkanAlphaBlendMode::Weighted,
+    true, {}, nullptr, {}, nullptr, VK_CULL_MODE_NONE);
+    transparencyResolveShader.bindSourceRenderTexture (*transparencyRenderTex);
     transparencyResolveShader.bindTargetRenderTexture (*screenRenderTex);
     
-    VulkanShaderData postprocessingShader("shaders/postprocessing.frag", false, false, VulkanAlphaBlendMode::None, true, nullptr, nullptr, nullptr, VK_CULL_MODE_NONE);
+    VulkanShaderData postprocessingShader("shaders/postprocessing.frag", false, false, VulkanAlphaBlendMode::None, true, {}, nullptr, {}, nullptr, VK_CULL_MODE_NONE);
     postprocessingShader.bindSourceRenderTexture (*screenRenderTex);
+    postprocessingShader.textureDescriptors.push_back(renderer.getMainDepthRenderTexture()->getDepthTextureDescriptor());
 
 
     int litShaderIndex         = renderer.loadShader (shader1Data);
@@ -131,7 +135,7 @@ int main () {
     int postprocessingShaderIndex = renderer.loadShader (postprocessingShader);
 
     
-
+ Debug::Log("hello");
     Mesh windowMesh     = generateQuad ();
     int windowMeshIndex = renderer.loadMesh (windowMesh);
 
@@ -179,9 +183,9 @@ int main () {
     m.setProperty ("tilingFactor", glm::vec2 (1.0f));
     RenderData sphereRenderData (sphereIndex, m);
     Crumb sphereObject (sphereRenderData);
-    sphereObject.transform.position = { 2, -0.5f, -3 };
+    sphereObject.transform.position = { 2, -1, -3 };
     sphereObject.transform.rotate ({ 1, 0, 0 }, -1.57);
-    sphereObject.transform.scaleByFactor ({ 1, 1, 0.7f });
+    sphereObject.transform.scaleByFactor ({ 2, 2, 1.4f });
 
     Material m2 (litShaderIndex);
     m2.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (grassIndex));
@@ -193,10 +197,11 @@ int main () {
     Crumb floorObject (floorRenderData);
     floorObject.transform.rotate ({ 1, 0, 0 }, 0);
     floorObject.transform.translate ({ 0, -1, 0 });
-    floorObject.transform.scaleByFactor (glm::vec3 (10));
+    floorObject.transform.scaleByFactor (glm::vec3 (20));
 
 
     Mesh skybox     = generateInvertedSphere ();
+    Debug::Log("hello");
     int skyboxIndex = renderer.loadMesh (skybox);
     Material m3 (unlitShaderIndex);
     m3.setProperty ("atlasOffset", renderer.getTextureAtlasOffset (skyboxTexture));
@@ -214,20 +219,32 @@ int main () {
                          renderer.getRelativeTextureSize (dragonTexture));
     mDragon.setProperty ("tilingFactor", glm::vec2 (1.0f));
 
-    /*RenderData dragonRenderData (dragonIndex, mDragon);
+    RenderData dragonRenderData (dragonIndex, mDragon);
     Crumb dragonObject (dragonRenderData);
     dragonObject.transform.position = { 0, 2, 0 };
     dragonObject.transform.scaleByFactor (glm::vec3 (0.2f));
     dragonObject.transform.rotate ({ 1, 0, 0 }, 1.57);
     dragonObject.transform.rotate ({ 0, 1, 0 }, 3.14);
-    dragonObject.transform.rotate ({ 0, 0, 1 }, 3.14);*/
-
-
+    dragonObject.transform.rotate ({ 0, 0, 1 }, 3.14);
     Scene scene;
+    
+    
+    /*Mesh sphere2 = generateSphere();
+    int sphereIndex2 = renderer.loadMesh(sphere2);
+    Material msd(litShaderIndex);
+    RenderData sphereRenderData2(sphereIndex2, msd);
+    
+    for(int i = 0; i < 1000; i++){
+        Crumb* sphereObject = new Crumb(sphereRenderData2);
+        sphereObject->transform.translate(glm::vec3(i/10.0f, i/10.0f, i/10.0f));
+        scene.addCrumb(*sphereObject);
+    }*/
+
+ 
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
     scene.addCrumb (skyboxObject);
-    // scene.addCrumb (dragonObject);
+    scene.addCrumb (dragonObject);
     scene.addCrumb (portalGun);
     scene.addCrumb (windowObj);
     scene.addCrumb (windowObj2);
@@ -241,13 +258,14 @@ int main () {
     scene.lightDir    = { 0.2f, 1.0f, 0.2f };
 
     InputManager inputs (window);
+    int frameCount = 0;
     while (!glfwWindowShouldClose (window)) {
+        frameCount ++;
         auto currentTime = Clock::now ();
         float deltaTime =
         std::chrono::duration<float> (currentTime - lastTime).count (); // in seconds
         lastTime = currentTime;
         elapsedTime += deltaTime;
-        // Debug::Log (std::to_string (1 / deltaTime));
         float speed = 4;
 
         if (inputs.isPressed (GLFW_KEY_W)) {
@@ -274,6 +292,8 @@ int main () {
 
         inputs.newFrame ();
         glfwPollEvents ();
+
+        Debug::Log(std::to_string(1/deltaTime));
     }
 
 

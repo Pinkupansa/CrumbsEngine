@@ -10,13 +10,16 @@
 class VulkanRenderTexture {
  private:
   const VulkanDevice& device;
-  VulkanAttachment colorAttachment;
-  VulkanAttachment resolveAttachment;
-  VulkanTextureDescriptor textureDescriptor;
+
+  std::vector<VulkanAttachment*> colorAttachments;
+  VulkanAttachment depthAttachment;
+  std::vector<VulkanAttachment*> resolveAttachments;
+  VulkanTextureDescriptor* depthTextureDescriptor;
+  std::vector<VulkanTextureDescriptor*> resolveTextureDescriptors;
   VulkanSyncObjects syncObjects;
 
  public:
-  VulkanRenderTexture(const VulkanDevice& device, VkExtent2D extent,
+  VulkanRenderTexture(const VulkanDevice& device, VkExtent2D extent, int nColorAttachments,
                       std::string name);
 
   ~VulkanRenderTexture();
@@ -24,9 +27,19 @@ class VulkanRenderTexture {
 
   const VulkanSyncObjects* getSyncObjects() const;
 
-  VulkanAttachment* getColorAttachment();
-  VulkanAttachment* getResolveAttachment();
-  VulkanTextureDescriptor& getTextureDescriptor();
+  VulkanAttachment* getColorAttachment(int index);
+  VulkanAttachment* getResolveAttachment(int index);
+  VulkanAttachment* getDepthAttachment();
+  VulkanTextureDescriptor* getColorTextureDescriptor(int index);
+  VulkanTextureDescriptor* getDepthTextureDescriptor();
+  VulkanTextureDescriptor* getResolveTextureDescriptor(int index);
+  
+  std::vector<VulkanAttachment*> getColorAttachments() const;
+  std::vector<VulkanAttachment*> getResolveAttachments() const;
+
+  std::vector<VulkanTextureDescriptor*> getResolveTextureDescriptors() const;
+
+
   void waitAndResetFences() const;
 
   void destroy();

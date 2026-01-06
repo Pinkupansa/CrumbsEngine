@@ -14,7 +14,7 @@ const VkDeviceSize& VulkanUBDescriptor::getAlignedObjectSize() const {
   return alignedObjectSize;
 }
 
-const bool VulkanUBDescriptor::isDynamic() const { return dynamic; }
+bool VulkanUBDescriptor::isDynamic() const { return dynamic; }
 const VulkanDescriptorData VulkanUBDescriptor::getDescData(int binding,
                                                            int set) const {
   return {descriptorSet, layout, pool, dynamic, alignedObjectSize, binding, set};

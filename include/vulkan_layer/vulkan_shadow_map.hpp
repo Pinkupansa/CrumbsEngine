@@ -23,8 +23,8 @@ class VulkanShadowMap {
 
   const VulkanTextureDescriptor& getTexture();
 
-  VulkanShadowMap(VulkanDevice& device, uint width, uint height,
-                  VkFormat format);
+  VulkanShadowMap(VulkanDevice& device, uint width, uint height);
+
   ~VulkanShadowMap();
   const std::function<void()> getFenceResetCallback();
   const VulkanSyncObjects& getSyncObjects() const;

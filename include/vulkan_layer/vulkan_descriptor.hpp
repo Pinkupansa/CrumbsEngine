@@ -22,7 +22,7 @@ class VulkanUBDescriptor {
 
   const VkDeviceSize& getAlignedObjectSize() const;
 
-  const bool isDynamic() const;
+  bool isDynamic() const;
   const VulkanDescriptorData getDescData(int binding, int set) const;
 
   VulkanUBDescriptor(VulkanDevice& device, VulkanBuffer& uniformBuffer,

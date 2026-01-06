@@ -36,9 +36,7 @@ class VulkanRenderer {
   std::vector<std::string> fragShaderPaths;
   // Window info
   GLFWwindow* window;
-  uint32_t width;
-  uint32_t height;
-
+  bool isFirstFrame;
   // Core Vulkan objects
   VulkanInstance instance;
   VulkanDevice device;
@@ -106,7 +104,8 @@ class VulkanRenderer {
 
   void drawFrame();
 
-  VulkanRenderTexture* createRenderTexture(std::string name);
+  VulkanRenderTexture* getMainDepthRenderTexture();
+  VulkanRenderTexture* createRenderTexture(std::string name, int nColorAttachments);
   int loadShader(const VulkanShaderData& shaderData);
 
   uint16_t loadTexture(const std::string& texturePath);

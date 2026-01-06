@@ -14,9 +14,11 @@ const VkRenderPass& VulkanRenderPass::getRenderPass() const {
   return renderPass;
 }
 
-const bool VulkanRenderPass::hasResolveAttachment() const {
+bool VulkanRenderPass::hasResolveAttachment() const {
   return hasResolve;
 }  // used to set nRasterizationSamples in pipeline
+
+int VulkanRenderPass::getNColorAttachments() const { return nColorAttachments; }
 
 VulkanRenderPass::VulkanRenderPass(
     const VulkanDevice& device,
@@ -54,6 +56,7 @@ VulkanRenderPass::VulkanRenderPass(
     }
   }
 
+  nColorAttachments = colorAttachmentDescs.size();
   int attachmentCount = 0;
   hasResolve = resolveAttachmentDescs.size() > 0;
   for (int i = 0; i < colorAttachmentDescs.size(); i++) {
@@ -79,7 +82,7 @@ VulkanRenderPass::VulkanRenderPass(
   }
 
   std::vector<VkAttachmentReference> resolveAttachmentsRefs;
-  for (VkAttachmentDescription rAtt : depthAttachmentDescs) {
+  for (VkAttachmentDescription rAtt : resolveAttachmentDescs) {
     resolveAttachmentsRefs.push_back(createColorAttachmentRef(attachmentCount));
     attachmentCount++;
   }

@@ -58,7 +58,7 @@ void VulkanInstance::setupDebugMessenger() {
   }
 }
 
-VulkanInstance::VulkanInstance(GLFWwindow* window) {
+VulkanInstance::VulkanInstance() {
   VkApplicationInfo appInfo = defaultAppInfo();
   uint32_t glfwExtensionCount = 0;
   const char**glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);

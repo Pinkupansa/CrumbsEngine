@@ -57,14 +57,16 @@ VkDeviceMemory allocateAndBindImageMemory (const VulkanDevice& device, const VkI
 VkDeviceMemory
 allocateAndBindBufferMemory (const VulkanDevice& device, const VkBuffer& buffer);
 
-VkAttachmentDescription
-createColorAttachment (bool isSingleSampled,
-                       VkAttachmentLoadOp loadOp,
-                       VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+VkAttachmentDescription createColorAttachment (bool isSingleSampled,
+                                               VkAttachmentLoadOp loadOp,
+                                               VkImageLayout initialLayout,
+                                               VkImageLayout finalLayout);
 
 VkAttachmentReference createColorAttachmentRef (int attachmentNumber);
 
-VkAttachmentDescription createDepthAttachment (VkAttachmentLoadOp loadOp);
+VkAttachmentDescription createDepthAttachment (VkAttachmentLoadOp loadOp,
+                                               VkImageLayout initialLayout,
+                                               VkImageLayout finalLayout);
 VkAttachmentDescription createShadowDepthAttachment (VkAttachmentLoadOp loadOp);
 VkAttachmentReference createDepthAttachmentRef (int attachmentNumber);
 
@@ -139,7 +141,7 @@ VkPipelineColorBlendAttachmentState createFullColorBlendAttachment ();
 VkPipelineColorBlendAttachmentState createAdditiveAlphaBlendAttachment ();
 VkPipelineColorBlendAttachmentState createWeightedAlphaBlendAttachment ();
 VkPipelineColorBlendStateCreateInfo
-createColorBlendStateInfo (const VkPipelineColorBlendAttachmentState& colorBlendAttachment);
+createColorBlendStateInfo (const std::vector<VkPipelineColorBlendAttachmentState>& attachments);
 
 VkPipelineLayout
 createPipelineLayout (const VulkanDevice& device,
@@ -210,8 +212,7 @@ std::vector<uint8_t> padImageRGBA (const std::vector<uint8_t>& srcPixels,
                                    int paddingPx,
                                    int& outWidth,
                                    int& outHeight);
-std::vector<glm::vec4> convertU8ToVec4(const std::vector<uint8_t>& u8Data,
-                                       bool srgb);
+std::vector<glm::vec4> convertU8ToVec4 (const std::vector<uint8_t>& u8Data, bool srgb);
 
 std::vector<uint8_t>
 convertVec4ToU8 (const std::vector<glm::vec4>& floatData, bool srgb = false);
@@ -273,3 +274,7 @@ VkImage blitDownsizedImage (const VulkanDevice& device,
                             uint32_t dstHeight,
                             VkDeviceMemory& imageMemory,
                             const char* name);
+void writeImageInDescriptorSet (const VulkanDevice& device,
+                                const VkImageView& imageView,
+                                const VkDescriptorSet& descSet,
+                                uint32_t binding = 0);

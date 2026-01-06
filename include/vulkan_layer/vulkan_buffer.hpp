@@ -9,16 +9,16 @@ class VulkanBuffer {
  private:
   VkBuffer buffer{VK_NULL_HANDLE};
   VkDeviceMemory memory{VK_NULL_HANDLE};
-  VkDeviceSize size;
+
   VkDeviceSize alignedObjectSize;
   bool dynamic;
 
  public:
   const VkBuffer& getBuffer() const;
 
-  const bool isDynamic() const;
+  bool isDynamic() const;
 
-  const VkDeviceSize getAlignedObjectSize() const;
+  VkDeviceSize getAlignedObjectSize() const;
 
   VulkanBuffer(const class VulkanDevice& deviceRef, VulkanBufferType type,
                VkDeviceSize size, const void* data = nullptr,
@@ -30,8 +30,6 @@ class VulkanBuffer {
   void destroy();
 
   void update(const void* data, VkDeviceSize size, VkDeviceSize offset);
-
-  const VkDeviceSize getSize() const;
 
  private:
   const class VulkanDevice& device;

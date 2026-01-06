@@ -21,13 +21,12 @@ const VulkanTextureDescriptor& VulkanShadowMap::getTexture() {
   return shadowTexture;
 }
 
-VulkanShadowMap::VulkanShadowMap(VulkanDevice& device, uint width, uint height,
-                                 VkFormat format)
+VulkanShadowMap::VulkanShadowMap(VulkanDevice& device, uint width, uint height)
     : pDevice(device),
       syncObjects(device, 1, false, "Shadow Sync "),
       shadowAttachment(device, VulkanAttachmentType::ShadowMap,
                        {width, height}, true, true, createDepthClearValue({1.0f, 0}),
-                       "Shadow Attachment "),
+                       "Shadow Attachment ", VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
       shadowTexture(device, shadowAttachment.getImageView(),
                     "Shadow Texture Sampler ") {}
 VulkanShadowMap::~VulkanShadowMap() { destroy(); }

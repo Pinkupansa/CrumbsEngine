@@ -11,8 +11,9 @@
 VulkanShaderData::VulkanShaderData(
     std::string filePath, bool enableDepthTest, bool enableDepthWrite,
     VulkanAlphaBlendMode alphaBlendMode, bool isFullScreenShader,
-    VulkanAttachment* customColorAttachment,
-    VulkanAttachment* customResolveAttachment,
+    std::vector<VulkanAttachment*> customColorAttachments,
+    VulkanAttachment* customDepthAttachment,
+    std::vector<VulkanAttachment*> customResolveAttachments,
     VulkanSyncObjects* customRenderTargetSyncObjects,
     VkCullModeFlagBits customCullMode,
     std::function<void()> customRenderTargetFenceResetCallback,
@@ -20,8 +21,9 @@ VulkanShaderData::VulkanShaderData(
     : filePath(filePath),
       enableDepthTest(enableDepthTest),
       enableDepthWrite(enableDepthWrite),
-      colorAttachment(customColorAttachment),
-      resolveAttachment(customResolveAttachment),
+      colorAttachments(customColorAttachments),
+      depthAttachment(customDepthAttachment),
+      resolveAttachments(customResolveAttachments),
       renderTargetSyncObjects(customRenderTargetSyncObjects),
       renderTargetFenceResetCallback(customRenderTargetFenceResetCallback),
       textureDescriptors(customTextureDescriptors),
@@ -31,13 +33,16 @@ VulkanShaderData::VulkanShaderData(
 
 void VulkanShaderData::bindTargetRenderTexture(
     VulkanRenderTexture& renderTexture) {
-  colorAttachment = renderTexture.getColorAttachment();
-  resolveAttachment = renderTexture.getResolveAttachment();
+  colorAttachments = renderTexture.getColorAttachments();
+  depthAttachment = renderTexture.getDepthAttachment();
+  resolveAttachments = renderTexture.getResolveAttachments();
   renderTargetSyncObjects = renderTexture.getSyncObjects();
   renderTargetFenceResetCallback = renderTexture.getFenceResetCallback();
 }
 
 void VulkanShaderData::bindSourceRenderTexture(
     VulkanRenderTexture& renderTexture) {
-  textureDescriptors.push_back(&(renderTexture.getTextureDescriptor()));
+  textureDescriptors = renderTexture.getResolveTextureDescriptors();
+  //textureDescriptors.push_back(renderTexture.getDepthTextureDescriptor());
+  //insert resolvedescriptors
 }

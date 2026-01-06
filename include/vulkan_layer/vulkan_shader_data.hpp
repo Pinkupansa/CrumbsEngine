@@ -15,8 +15,9 @@ class VulkanShaderData {
     std::string filePath;
     bool enableDepthTest;
     bool enableDepthWrite;
-    VulkanAttachment* colorAttachment = nullptr; // leave unchanged to render on swapchain
-    VulkanAttachment* resolveAttachment = nullptr;
+    std::vector<VulkanAttachment*> colorAttachments; // leave unchanged to render on swapchain
+    VulkanAttachment* depthAttachment = nullptr;
+    std::vector<VulkanAttachment*> resolveAttachments;
     const VulkanSyncObjects* renderTargetSyncObjects;
     std::function<void ()> renderTargetFenceResetCallback;
     std::vector<VulkanTextureDescriptor*> textureDescriptors; // extra textures to sample
@@ -28,8 +29,9 @@ class VulkanShaderData {
                       bool enableDepthWrite,
                       VulkanAlphaBlendMode alphaBlendMode,
                       bool isFullScreenShader                   = false,
-                      VulkanAttachment* customColorAttachment   = nullptr,
-                      VulkanAttachment* customResolveAttachment = nullptr,
+                      std::vector<VulkanAttachment*> customColorAttachment   = {},
+                      VulkanAttachment* customDepthAttachment  = nullptr,
+                      std::vector<VulkanAttachment*> customResolveAttachment = {},
                       VulkanSyncObjects* customRenderTargetSyncObjects = nullptr,
                       VkCullModeFlagBits customCullMode = VK_CULL_MODE_BACK_BIT,
                       std::function<void ()> customRenderTargetFenceResetCallback = nullptr,

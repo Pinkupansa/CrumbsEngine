@@ -5,9 +5,9 @@
 class VulkanDevice;
 class VulkanFramebuffers;
 class VulkanBuffer;
-class VulkanDescriptorData;
+struct VulkanDescriptorData;
 class VulkanPipeline;
-class MeshDrawInfo;
+struct MeshDrawInfo;
 class VulkanRenderPass;
 
 class VulkanCommandBuffers {

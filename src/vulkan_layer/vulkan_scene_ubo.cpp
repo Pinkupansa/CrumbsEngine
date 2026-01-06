@@ -47,4 +47,5 @@ VulkanSceneUBO::VulkanSceneUBO(const glm::mat4& camView,
   lightColor = lightCol;
   skyColor = skyCol;
   groundColor = groundCol;
+  invViewProj = glm::inverse(proj * view);
 }
