@@ -58,7 +58,9 @@ VulkanRenderPass::VulkanRenderPass(
 
   nColorAttachments = colorAttachmentDescs.size();
   int attachmentCount = 0;
+
   hasResolve = resolveAttachmentDescs.size() > 0;
+  Debug::Log(std::to_string(hasResolve));
   for (int i = 0; i < colorAttachmentDescs.size(); i++) {
     clearValues.push_back(colorClearValues[i]);
   }

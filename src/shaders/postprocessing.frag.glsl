@@ -38,11 +38,18 @@ vec3 ACES(vec3 x) {
     return clamp((x*(a*x+b)) / (x*(c*x+d)+e), 0.0, 1.0);
 }
 
+
+float LinearizeDepth(float d){
+    return 50.0/(500 + d*(499.9f));
+}
 // Optimized ambient occlusion
 float computeAmbientOcclusion() {
     // Pre-fetch fragment depth and texture size
     ivec2 coords = ivec2(gl_FragCoord.xy);
     float depth = texelFetch(depths, coords, 0).r;
+    if(depth > 0.99f){
+        return 1.0;
+    }
     ivec2 texSize = textureSize(colors, 0);
 
     // Compute world-space position using precomputed inverse matrix
@@ -50,6 +57,11 @@ float computeAmbientOcclusion() {
     vec4 pos = scene.invProjView * vec4(screenCoords, depth, 1.0);
     pos /= pos.w;
 
+    vec4 posView = scene.view * pos;
+    
+
+
+    
     // Gradients for expected depth changes
     float gradX = dFdx(depth * float(texSize.x));
     float gradY = dFdy(depth * float(texSize.y));
@@ -59,8 +71,7 @@ float computeAmbientOcclusion() {
 
      vec3 offsets[8] = vec3[8](
         vec3(-1, -1, -1), vec3(1, -1, -1), vec3(-1, 1, -1), vec3(-1, -1, 1),
-        vec3(1, 1, -1), vec3(-1, 1, 1), vec3(1, -1, 1), vec3(1, 1, 1)
-    );
+        vec3(1, 1, -1), vec3(-1, 1, 1), vec3(1, -1, 1), vec3(1, 1, 1));
 
     // Precompute offsets
     for (int i = 0; i < 8; ++i) {
@@ -74,26 +85,28 @@ float computeAmbientOcclusion() {
             vec4 clip = scene.proj * scene.view * newPos;
             clip /= clip.w;
             vec2 newUV = clip.xy * 0.5 + 0.5;
-
             ivec2 newPixel = ivec2(newUV * texSize);
             float newDepth = texelFetch(depths, newPixel, 0).r;
 
-            vec4 actualNewPos = scene.invProjView * vec4(newUV * 2.0 - 1.0, newDepth, 1.0);
+
+            vec4 actualNewPos = scene.invProjView * vec4(clip.xy, newDepth, 1.0);
+            
             actualNewPos /= actualNewPos.w;
+            
 
             vec3 diff = actualNewPos.xyz - pos.xyz;
+        
             float expectedChange = (newUV.x - fragUV.x) * gradX + (newUV.y - fragUV.y) * gradY;
-
-            if (expectedChange > newDepth - depth + 0.0003/(depth*depth) && length(diff) < 2.0 * radius) {
-                occlusion += length(diff) * 20.0 * hash33(newPos.xyz); // simplified multiplier
-            }
+            occlusion += ((expectedChange >  newDepth - depth + 0.005/( -posView.z * -posView.z)) ? 1.0 : 0.0) * smoothstep(0, 1, radius/abs(depth - newDepth));
+        
         }
     
 
-    return clamp(1.0 - occlusion / 2.0, 0.0, 1.0);
+    return clamp(1.0 - occlusion/4, 0.0, 1.0);
 }
 
 void main() {
-    float ao = computeAmbientOcclusion();
-    outColor = texture(colors, fragUV) * ao;
+    ivec2 coords = ivec2(fragUV * textureSize(colors, 0));
+
+    outColor = texture(colors, fragUV)* computeAmbientOcclusion();
 }

@@ -20,6 +20,8 @@ const VkCommandPool& VulkanDevice::getCommandPool() const {
 
 const VkQueue& VulkanDevice::getGraphicsQueue() const { return graphicsQueue; }
 
+uint32_t VulkanDevice::getGraphicsFamilyIndex() const { return graphicsFamilyIndex; }
+
 VulkanDevice::VulkanDevice(VulkanInstance& instance) {
   // First call to get the device Count
   uint32_t deviceCount = 0;

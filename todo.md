@@ -7,8 +7,11 @@
 - Gizmos support
 - rewrite syncobjects which is currently tailored for the swapchain
 - rewrite texture bundle to use texturedescriptor
+- UI
 - instancing
-- dont re-record, only update uniform buffers 
+- dont re-record, only update uniform buffers (not possible in moltenVK?)
+- implement actual AO
+- investigate FPS loss
 
 ## Engine Layer
 ### Graphics Engine

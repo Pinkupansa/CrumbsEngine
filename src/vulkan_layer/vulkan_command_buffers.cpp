@@ -11,6 +11,7 @@
 #include "vulkan_layer/vulkan_render_pass.hpp"
 #include <stdexcept>
 #include <vector>
+#include "backends/imgui_impl_vulkan.h"
 using Clock = std::chrono::high_resolution_clock;
 
 
@@ -48,9 +49,9 @@ void VulkanCommandBuffers::record(
     const VulkanBuffer& indexBuffer,
     const std::vector<VulkanDescriptorData>& descriptors,
     const VulkanPipeline& graphicsPipeline,
-    std::vector<MeshDrawInfo> meshPool,
-    std::vector<uint32_t> meshDrawIndices, int commandBufferIndex,
-    bool isFullscreenShader) const {
+    const std::vector<MeshDrawInfo>& meshPool,
+    const std::vector<uint32_t>& meshDrawIndices, int commandBufferIndex,
+    bool isFullscreenShader, ImDrawData* drawData) const {
   // split descriptors in dynamic and non-dynamic
 
   std::vector<VulkanDescriptorData> dynamicDescriptors;
@@ -130,6 +131,10 @@ void VulkanCommandBuffers::record(
       );
     }
 
+  }
+
+  if (drawData) {
+      ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffers[commandBufferIndex]);
   }
 
   vkCmdEndRenderPass(commandBuffers[commandBufferIndex]);

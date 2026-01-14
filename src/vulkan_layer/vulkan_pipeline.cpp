@@ -9,6 +9,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include "engine_layer/debug.hpp"
 
 std::vector<char> readFile (const std::string& filename) {
     std::ifstream file (filename, std::ios::ate | std::ios::binary);
@@ -84,6 +85,8 @@ VulkanPipeline::VulkanPipeline (const VulkanDevice& device,
     VkPipelineRasterizationStateCreateInfo rasterizerInfo =
     createDefaultRasterizerInfo (cullMode);
 
+
+    Debug::Log("pipeline has resolve " + std::to_string(renderPass.hasResolveAttachment()));
     VkPipelineMultisampleStateCreateInfo multisamplingInfo =
     createMSAAInfo (renderPass.hasResolveAttachment ());
 

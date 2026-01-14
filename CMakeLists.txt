@@ -31,6 +31,7 @@ pkg_check_modules(GLFW REQUIRED glfw3)
 # Find Assimp
 find_package(assimp REQUIRED)
 
+add_subdirectory(external/imgui)
 # -------------------------------
 # Optional: ccache
 # -------------------------------
@@ -46,6 +47,8 @@ endif()
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 file(GLOB_RECURSE HEADERS "include/*.h" "include/*.hpp")
 add_executable(vulkan_test ${SOURCES} ${HEADERS})
+
+target_link_libraries(vulkan_test PRIVATE imgui)
 
 target_include_directories(vulkan_test PRIVATE
     include

@@ -57,7 +57,7 @@ std::string name)
 void VulkanImageDrawer::draw (const VulkanBuffer& vertexBuffer,
                               const VulkanBuffer& indexBuffer,
                               const std::vector<MeshDrawInfo>& meshPool,
-                              const std::vector<uint32_t>& drawCallMeshIndices) {
+                              const std::vector<uint32_t>& drawCallMeshIndices, ImDrawData* drawData) {
     int syncIndex       = renderTargetSyncObjects.getSyncIndex ();
     uint32_t imageIndex = renderTargetSyncObjects.getCurrentFrame ();
     renderTargetFenceResetCallback ();
@@ -65,7 +65,7 @@ void VulkanImageDrawer::draw (const VulkanBuffer& vertexBuffer,
     //forced to re-record every frame in molten-vk
     commandBuffers.record (imageExtent, renderPass, framebuffers, vertexBuffer,
                                indexBuffer, descriptors, graphicsPipeline, meshPool,
-                               drawCallMeshIndices, imageIndex, isFullScreenShader);
+                               drawCallMeshIndices, imageIndex, isFullScreenShader, drawData);
     // submit
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

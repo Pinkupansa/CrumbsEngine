@@ -4,12 +4,15 @@
 #include "engine_layer/debug.hpp"
 #include "engine_layer/input_manager.hpp"
 #include "engine_layer/primitive_meshes.hpp"
+#include "engine_layer/imgui_manager.hpp"
 #include "engine_layer/scene.hpp"
 #include "vulkan_layer/vulkan_renderer.hpp"
 #include "vulkan_layer/vulkan_shader_data.hpp"
 #include <GLFW/glfw3.h>
 using Clock = std::chrono::high_resolution_clock;
 
+// [ImGui] Include
+#include "imgui.h"
 
 void renderCrumb (VulkanRenderer& renderer, Crumb& crumb) {
     if (!crumb.renderData.has_value ()) {
@@ -50,17 +53,13 @@ int main () {
     glfwCreateWindow (width, height, "Vulkan Window", nullptr, nullptr);
 
     VulkanRenderer renderer (window, width, height);
- Debug::Log("hello");
 
     Mesh portalgunMesh          = loadOBJShared ("portalgun.obj");
     uint32_t portalGunMeshIndex = renderer.loadMesh (portalgunMesh);
- Debug::Log("hello");
     Mesh quadMesh      = generateQuad ();
     uint32_t quadIndex = renderer.loadMesh (quadMesh);
- Debug::Log("hello");
     Mesh sphere          = importMesh ("cottage_fbx.fbx");
     uint32_t sphereIndex = renderer.loadMesh (sphere);
- Debug::Log("hello");
     Mesh debugTextureQuad          = generateQuad ();
     uint32_t debugTextureQuadIndex = renderer.loadMesh (debugTextureQuad);
     glm::mat4 debugTextureQuadModel =
@@ -68,7 +67,6 @@ int main () {
                                 { 0.0f, -15.0f, -3.0f }),
                 glm::vec3 (10.0f));
 
- Debug::Log("hello");
     Mesh dragon          = importMesh ("dragon.fbx");
     uint32_t dragonIndex = renderer.loadMesh (dragon);
 
@@ -229,7 +227,7 @@ int main () {
     Scene scene;
     
     
-    /*Mesh sphere2 = generateSphere();
+    Mesh sphere2 = generateSphere();
     int sphereIndex2 = renderer.loadMesh(sphere2);
     Material msd(litShaderIndex);
     RenderData sphereRenderData2(sphereIndex2, msd);
@@ -238,8 +236,7 @@ int main () {
         Crumb* sphereObject = new Crumb(sphereRenderData2);
         sphereObject->transform.translate(glm::vec3(i/10.0f, i/10.0f, i/10.0f));
         scene.addCrumb(*sphereObject);
-    }*/
-
+    }
  
     scene.addCrumb (sphereObject);
     scene.addCrumb (floorObject);
@@ -258,6 +255,16 @@ int main () {
     scene.lightDir    = { 0.2f, 1.0f, 0.2f };
 
     InputManager inputs (window);
+
+    // [ImGui] Initialization
+    // Note: Ensure your VulkanRenderer exposes these getters.
+    // If getImageCount() is not available, you can pass a fixed value like 2 or 3.
+    ImGuiManager imguiManager(window, 
+        renderer.getInstance(), renderer.getPhysicalDevice(), renderer.getDevice(), 
+        renderer.getQueueFamilyIndex(), renderer.getQueue(), renderer.getRenderPass(), 
+        2, 2 // MinImageCount, ImageCount
+    );
+
     int frameCount = 0;
     while (!glfwWindowShouldClose (window)) {
         frameCount ++;
@@ -288,12 +295,23 @@ int main () {
         cam.transform.rotate (cam.transform.right (),
                               -inputs.getMouseDisplacement ().y * deltaTime);
         renderScene (renderer, scene);
-        renderer.drawFrame ();
+
+        // [ImGui] New Frame & UI Definition
+        imguiManager.newFrame();
+        
+        ImGui::Begin("Performance");
+        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        ImGui::Text("Frame Time: %.3f ms", 1000.0f / ImGui::GetIO().Framerate);
+        ImGui::End();
+
+        imguiManager.render();
+
+        // [ImGui] Pass draw data to renderer
+        renderer.drawFrame(ImGui::GetDrawData());
 
         inputs.newFrame ();
         glfwPollEvents ();
 
-        Debug::Log(std::to_string(1/deltaTime));
     }
 
 

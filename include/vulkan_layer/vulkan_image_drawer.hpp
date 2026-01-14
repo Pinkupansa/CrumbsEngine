@@ -56,7 +56,9 @@ class VulkanImageDrawer {
 
   void draw(const VulkanBuffer& vertexBuffer, const VulkanBuffer& indexBuffer,
             const std::vector<MeshDrawInfo>& meshPool,
-            const std::vector<uint32_t>& drawCallMeshIndices);
+            const std::vector<uint32_t>& drawCallMeshIndices, ImDrawData* drawData = nullptr);
 
   void destroy();
+
+  VulkanRenderPass& getRenderPass() { return renderPass; }
 };

@@ -9,6 +9,7 @@ struct VulkanDescriptorData;
 class VulkanPipeline;
 struct MeshDrawInfo;
 class VulkanRenderPass;
+struct ImDrawData;
 
 class VulkanCommandBuffers {
  private:
@@ -30,9 +31,9 @@ class VulkanCommandBuffers {
               const VulkanBuffer& vertexBuffer, const VulkanBuffer& indexBuffer,
               const std::vector<VulkanDescriptorData>& descriptors,
               const VulkanPipeline& graphicsPipeline,
-              std::vector<MeshDrawInfo> meshPool,
-              std::vector<uint32_t> meshDrawIndices, int commandBufferIndex,
-              bool isFullscreenShader) const;
+              const std::vector<MeshDrawInfo>& meshPool,
+              const std::vector<uint32_t>& meshDrawIndices, int commandBufferIndex, 
+              bool isFullscreenShader, ImDrawData* drawData = nullptr) const;
 
   const std::vector<VkCommandBuffer>& getCommandBuffers() const;
 };

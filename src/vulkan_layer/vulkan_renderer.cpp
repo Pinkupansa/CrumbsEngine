@@ -26,6 +26,7 @@
 #include <functional>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
+#include "imgui.h"
 
 VulkanRenderer::VulkanRenderer (GLFWwindow* _window, uint32_t _width, uint32_t _height)
 : window (_window), instance (),
@@ -168,7 +169,7 @@ void VulkanRenderer::initSceneData (const Scene& scene) {
     sceneDataUB.update (&sceneData, sizeof (VulkanSceneUBO), 0);
 }
 using Clock = std::chrono::high_resolution_clock;
-void VulkanRenderer::drawFrame () {
+void VulkanRenderer::drawFrame (ImDrawData* drawData) {
     // pad and upload object UBOs
     
 
@@ -179,7 +180,6 @@ void VulkanRenderer::drawFrame () {
     shadowImageDrawer.draw (vertexBuffer, indexBuffer, meshPool, drawCallMeshIndices);
     
     swapchain.updateFrameIndex ();
-    Debug::Log("####HAUIOFHQWEOIFHJWOI#$####");
     for (int i = 0; i < imageDrawersPerFragShader.size (); i++) {
         if (!flexibleBufferPerFragShader[i]->isEmpty ()) {
             std::vector<uint8_t> paddedUBOsForShader =
@@ -189,8 +189,9 @@ void VulkanRenderer::drawFrame () {
             flexibleBufferPerFragShader[i]->pushToGPU ();
         }
 
+        ImDrawData* uiDrawData = (i == imageDrawersPerFragShader.size() - 1) ? drawData : nullptr;
         imageDrawersPerFragShader[i]->draw (vertexBuffer, indexBuffer, meshPool,
-                                            drawCallMeshIndicesPerFragShader[i]);
+                                            drawCallMeshIndicesPerFragShader[i], uiDrawData);
         
     }
     isFirstFrame = false;
@@ -357,4 +358,12 @@ void VulkanRenderer::destroy () {
     textureBundle.destroy ();
     device.destroy ();
     instance.destroy ();
+}
+
+uint32_t VulkanRenderer::getQueueFamilyIndex() const {
+    return device.getGraphicsFamilyIndex();
+}
+
+VkRenderPass VulkanRenderer::getRenderPass() const {
+    return imageDrawersPerFragShader.empty() ? VK_NULL_HANDLE : imageDrawersPerFragShader.back()->getRenderPass().getRenderPass();
 }

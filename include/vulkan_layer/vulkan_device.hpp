@@ -29,6 +29,8 @@ class VulkanDevice {
   const VkCommandPool& getCommandPool() const;
 
   const VkQueue& getGraphicsQueue() const;
+  
+  uint32_t getGraphicsFamilyIndex() const;
 
   VulkanDevice(VulkanInstance& instance);
 

@@ -25,6 +25,9 @@ class VulkanFSB {
   const FSBObject getDefaultObject() const;
   VulkanFSB(const VulkanDevice& device, std::string jsonFile, int uboSetNumber,
             VkDeviceSize alignment, std::string name);
+  //destroyer 
+
+
   void computeObjectSize();
   int addObject();
 

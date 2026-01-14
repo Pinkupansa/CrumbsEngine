@@ -25,6 +25,8 @@
 #include "vulkan_layer/vulkan_ubo.hpp"
 #include "vulkan_layer/vulkan_vertex.hpp"
 
+struct ImDrawData;
+
 class VulkanRenderer {
  private:
   // Shader paths
@@ -102,7 +104,7 @@ class VulkanRenderer {
 
   void initSceneData(const Scene& scene);
 
-  void drawFrame();
+  void drawFrame(ImDrawData* drawData = nullptr);
 
   VulkanRenderTexture* getMainDepthRenderTexture();
   VulkanRenderTexture* createRenderTexture(std::string name, int nColorAttachments);
@@ -117,4 +119,11 @@ class VulkanRenderer {
   ~VulkanRenderer();
 
   void destroy();
+
+  VkInstance getInstance() const { return instance.getInstance(); }
+  VkPhysicalDevice getPhysicalDevice() const { return device.getPhysicalDevice(); }
+  VkDevice getDevice() const { return device.getDevice(); }
+  uint32_t getQueueFamilyIndex() const;
+  VkQueue getQueue() const { return device.getGraphicsQueue(); }
+  VkRenderPass getRenderPass() const;
 };
